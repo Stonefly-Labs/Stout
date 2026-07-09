@@ -1,0 +1,8 @@
+# Swift Package Index manifest — https://swiftpackageindex.com/add-a-package
+version: 1
+builder:
+  configs:
+    - documentation_targets:
+        - Stout
+external_links:
+  documentation: https://github.com/StoneflyLabs/stout

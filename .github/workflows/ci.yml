@@ -1,0 +1,40 @@
+# Stout CI
+#
+# INTERIM: this workflow runs on a self-hosted runner while the maintainer
+# registers one. It currently only covers whatever OS the self-hosted runner
+# provides.
+#
+# TODO: Stout is a SERVER-SIDE library, so Linux coverage is essential — a
+# regression that only surfaces on Linux (Glibc, swift-corelibs-foundation,
+# NIO transport differences) must be caught in CI, not by consumers. Once
+# runners are available, replace the self-hosted job with:
+#   - a Linux leg (official `swift:6.x` Docker images, e.g. Ubuntu Jammy + Noble),
+#   - a GitHub-hosted macOS + Linux matrix (macos-latest + ubuntu-latest).
+# See docs/speckit/00-foundation-setup.md §4.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift build
+        run: swift build
+      - name: swift test
+        run: swift test
+
+  lint:
+    name: Lint (swift-format)
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift format lint
+        run: swift format lint --strict --recursive Sources Tests
