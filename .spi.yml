@@ -5,4 +5,4 @@ builder:
     - documentation_targets:
         - Stout
 external_links:
-  documentation: https://github.com/StoneflyLabs/stout
+  documentation: https://github.com/Stonefly-Labs/Stout

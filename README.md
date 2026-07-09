@@ -36,8 +36,7 @@ Add Stout to your `Package.swift`:
 
 ```swift
 dependencies: [
-  // NOTE: the GitHub org slug is a placeholder and may be adjusted.
-  .package(url: "https://github.com/StoneflyLabs/stout.git", from: "0.1.0")
+  .package(url: "https://github.com/Stonefly-Labs/Stout.git", from: "0.1.0")
 ]
 ```
 
