@@ -7,3 +7,6 @@ Package.resolved
 
 ## macOS
 .DS_Store
+
+## Claude Code — local, per-developer (may hold credentials/permissions)
+.claude/settings.local.json
