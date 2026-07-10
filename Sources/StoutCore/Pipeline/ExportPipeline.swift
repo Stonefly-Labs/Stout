@@ -103,8 +103,13 @@ public actor ExportPipeline {
       return
     }
     guard buffer.count < configuration.bufferCapacity else {
-      // Bounded buffer, drop-on-overflow. Detailed accounting/diagnostics: US3.
+      // Bounded buffer: drop-on-overflow (FR-014, SC-003). Never block the caller,
+      // never grow past capacity. `droppedCount` is the authoritative accounting;
+      // a secret-free `bufferOverflow` diagnostic surfaces the loss carrying only a
+      // magnitude — no connection string, iKey, or payload (FR-016/FR-028/FR-031).
       droppedCountStorage &+= 1
+      diagnostics.report(
+        DiagnosticEvent(severity: .warning, code: .bufferOverflow, itemCount: 1))
       return
     }
     buffer.append(envelope)

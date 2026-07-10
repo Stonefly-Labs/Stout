@@ -110,11 +110,11 @@ Swift library (SwiftPM). Sources in `Sources/StoutCore/`, tests in `Tests/StoutC
 
 ### Tests for User Story 3
 
-- [ ] T022 [P] [US3] `OverflowTests` in `Tests/StoutCoreTests/OverflowTests.swift`: at capacity → further submits dropped (not blocked), `droppedCount` increments by exactly the overflow count, memory bounded to capacity; no unbounded growth in retry state (Acc #5; FR-014; SC-003).
+- [X] T022 [P] [US3] `OverflowTests` in `Tests/StoutCoreTests/OverflowTests.swift`: at capacity → further submits dropped (not blocked), `droppedCount` increments by exactly the overflow count, memory bounded to capacity; no unbounded growth in retry state (Acc #5; FR-014; SC-003).
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Enforce hard buffer capacity with drop-on-overflow + `droppedCount` (with secret-free diagnostics accounting via T004) in `Sources/StoutCore/Pipeline/ExportPipeline.swift` (FR-014; extends T021; make T022 pass).
+- [X] T023 [US3] Enforce hard buffer capacity with drop-on-overflow + `droppedCount` (with secret-free diagnostics accounting via T004) in `Sources/StoutCore/Pipeline/ExportPipeline.swift` (FR-014; extends T021; make T022 pass).
 
 **Checkpoint**: Pipeline is do-no-harm under sustained overload.
 
