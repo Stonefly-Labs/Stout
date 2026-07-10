@@ -1,15 +1,18 @@
 # Stout CI
 #
 # INTERIM: this workflow runs on a self-hosted runner while the maintainer
-# registers one. It currently only covers whatever OS the self-hosted runner
-# provides.
+# registers one. The macOS legs (swift build/test + swift-format lint) plus an
+# iOS-Simulator build leg run there today.
 #
-# TODO: Stout is a SERVER-SIDE library, so Linux coverage is essential — a
-# regression that only surfaces on Linux (Glibc, swift-corelibs-foundation,
-# NIO transport differences) must be caught in CI, not by consumers. Once
-# runners are available, replace the self-hosted job with:
-#   - a Linux leg (official `swift:6.x` Docker images, e.g. Ubuntu Jammy + Noble),
-#   - a GitHub-hosted macOS + Linux matrix (macos-latest + ubuntu-latest).
+# WHY macOS-alone is insufficient (design D6/D7): Stout is a cross-platform
+# exporter for opentelemetry-swift that runs on iOS, macOS, watchOS, tvOS and
+# Linux. Platform-specific transport (URLSession on Apple vs async-http-client
+# on Linux) and Foundation differences are real, so CI MUST cover the
+# iOS Simulator AND Linux — not just macOS.
+#
+# TODO (Linux leg — still outstanding): add a Linux job on the official
+# `swift:6.x` Docker images (e.g. Ubuntu Jammy + Noble) once a Linux runner /
+# Docker is available, and eventually a GitHub-hosted macOS + Linux matrix.
 # See docs/speckit/00-foundation-setup.md §4.
 
 name: CI
@@ -22,7 +25,7 @@ on:
 
 jobs:
   build-test:
-    name: Build & Test
+    name: Build & Test (macOS)
     runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +33,18 @@ jobs:
         run: swift build
       - name: swift test
         run: swift test
+
+  ios-simulator:
+    name: Build (iOS Simulator)
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/checkout@v4
+      # Generic destination — builds for the simulator without booting one.
+      - name: xcodebuild (iOS Simulator)
+        run: >
+          xcodebuild build
+          -scheme Stout
+          -destination 'generic/platform=iOS Simulator'
 
   lint:
     name: Lint (swift-format)

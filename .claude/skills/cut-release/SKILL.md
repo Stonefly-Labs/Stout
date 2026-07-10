@@ -111,10 +111,11 @@ gh run list --branch vX.Y.Z
 gh run watch <run-id>
 ```
 
-CI currently runs on a **self-hosted, macOS-only** runner (decision D6). **Linux
-coverage is a known gap** — for a release, at minimum sanity-check that the change
-does not rely on macOS-only Foundation/NIO behavior, since Stout is a server-side
-(Linux-first) library.
+CI currently runs on a **self-hosted, macOS-only** runner (decision D6). **iOS-sim
+and Linux legs are a known gap** — for a release, at minimum sanity-check that the
+change does not rely on macOS-only Foundation/URLSession behavior, since Stout ships
+for iOS/macOS/watchOS/tvOS + Linux (URLSession on Apple, async-http-client on Linux;
+D7/D9).
 
 ## Checklist
 

@@ -13,10 +13,12 @@ Legend: ☐ = to do · **[CONFIRM]** = a decision the maintainer should sign off
 
 ## 1. Package identity & manifest
 
-- ☐ **`Package.swift`**, `swift-tools-version:6.0`, `swiftLanguageModes: [.v6]`,
+- ☑ **`Package.swift`**, `swift-tools-version:6.0`, `swiftLanguageModes: [.v6]`,
   strict concurrency **complete**.
-- ☑ Platforms: `.macOS(.v13)` for Apple platforms; Linux supported implicitly
-  (server-side; no iOS/tvOS/watchOS — this is not a mobile SDK). **(decided)**
+- ☑ Platforms: `.iOS(.v13)`, `.macOS(.v12)`, `.watchOS(.v6)`, `.tvOS(.v13)`,
+  `.visionOS(.v1)` for Apple platforms; Linux supported implicitly. The floor
+  tracks what `opentelemetry-swift` supports — Stout is a cross-platform exporter,
+  NOT server-only. **(decided — D7)**
 - ☑ Package name `stout`; products & modules `Stout*` (below). **(decided — D5)**
 
 ## 2. Module graph (targets)
@@ -25,16 +27,16 @@ Mirrors `design.md §5`. Each library target has a sibling `…Tests` target.
 
 | Target | Kind | Depends on | Notes |
 |---|---|---|---|
-| `StoutCore` | library | async-http-client, swift-log¹, NIO | config, Breeze envelope model, pipeline, resource, transport |
-| `StoutTracing` | library | Core, swift-distributed-tracing | `Tracer`/`Instrument` backend |
-| `StoutLogging` | library | Core, swift-log | `LogHandler` backend |
-| `StoutMetrics` | library | Core, swift-metrics | `MetricsFactory` backend |
+| `StoutCore` | library | `OpenTelemetrySdk`, async-http-client **(Linux only, conditional)** | config/secrets, Breeze envelope model, OTel→Breeze translation, resource, transport (URLSession on Apple / AHC on Linux) |
+| `StoutTracing` | library | Core, `OpenTelemetrySdk` | `SpanExporter` implementation |
+| `StoutLogging` | library | Core, `OpenTelemetrySdk` | `LogRecordExporter` implementation |
+| `StoutMetrics` | library | Core, `OpenTelemetrySdk` | `MetricExporter` implementation |
 | `StoutLiveMetrics` | library | Core | QuickPulse channel (separate) |
-| `Stout` | library | Tracing, Logging, Metrics (+ LiveMetrics opt) | one-call distro bootstrap |
-| `StoutServiceLifecycle` | library | `Stout`, swift-service-lifecycle | **optional additive target (D3)** — the ONLY place swift-service-lifecycle is a dependency |
+| `Stout` | library | Tracing, Logging, Metrics | umbrella: configure OTel providers + register exporters |
+| `StoutServiceLifecycle` | library | `Stout`, swift-service-lifecycle | **optional additive target (D3)** — the ONLY place swift-service-lifecycle is a dependency; server-side only |
 
-¹ swift-log in Core is for the library's **internal diagnostics** channel (D1
-warn-once), never the user's telemetry pipeline.
+¹ Internal diagnostics use `os.Logger` on Apple / a minimal fallback — **not**
+swift-log (dropped with the SSWG facades, D8).
 
 - ☐ Products: expose `Stout` (umbrella) + each signal module + the optional
   `StoutServiceLifecycle` as separate products so consumers pay only for
@@ -42,11 +44,20 @@ warn-once), never the user's telemetry pipeline.
 
 ## 3. Dependencies (pins)
 
-- ☐ `apple/swift-log`
-- ☐ `apple/swift-metrics`
-- ☐ `apple/swift-distributed-tracing`
-- ☐ `swift-server/async-http-client`
-- ☐ `swift-server/swift-service-lifecycle` — **only** for the optional target
+- ☑ `open-telemetry/opentelemetry-swift-core` (`from: "2.5.0"`; resolves to 2.5.1)
+  — products `OpenTelemetryApi` + `OpenTelemetrySdk`. This is the minimal split-out
+  **core** package; it carries the public `SpanExporter`/`MetricExporter`/
+  `LogRecordExporter` protocols and the `SpanData`/`ReadableLogRecord`/`MetricData`
+  types, and pulls **no** OTLP/gRPC/protobuf (its only transitive dep is
+  swift-atomics). StoutCore + the three signal modules depend on `OpenTelemetrySdk`.
+- ☑ `swift-server/async-http-client` — **Linux-only**, attached to `StoutCore`
+  conditionally via `condition: .when(platforms: [.linux])`. Apple platforms use
+  URLSession (Foundation) with no package dependency (D9).
+- ☑ `swift-server/swift-service-lifecycle` — **only** for the optional
+  `StoutServiceLifecycle` target.
+- ✂️ **Removed:** `apple/swift-log`, `apple/swift-metrics`,
+  `apple/swift-distributed-tracing` — dropped with the SSWG facades (D8). Internal
+  diagnostics use `os.Logger`/a minimal fallback, not swift-log.
 - ☐ **[PLAN]** gzip strategy — system `zlib` via a C target vs a Swift compression
   package. Needed by Core transport; decide in spec 01's plan.
 - Keep the dependency set **minimal and audited** (constitution). Every add is a
@@ -56,11 +67,14 @@ warn-once), never the user's telemetry pipeline.
 
 - ☑ **Runner (interim — D6):** `runs-on: [self-hosted]` — the maintainer registers
   a self-hosted runner on the repo. CI stays red until that runner is online.
-- ☑ **Jobs:** `swift build` + `swift test`; plus a lint gate
+- ☑ **Jobs:** `swift build` + `swift test` (macOS); an **iOS-Simulator build leg**
+  via `xcodebuild build -scheme Stout -destination 'generic/platform=iOS Simulator'`
+  (generic destination, no booted simulator needed); plus a lint gate
   `swift format lint --strict --recursive Sources Tests`.
-- ☐ **[LATER]** Move to a GitHub-hosted **Linux + macOS** matrix (official
-  `swift:6.x` images + `macos-14`) once runners are available — Linux coverage
-  matters for a server-side lib. Optional Swift-6.1/nightly early-warning leg then.
+- ☐ **[TODO — outstanding] Linux leg:** macOS-alone is insufficient (D6/D7) — a
+  cross-platform exporter must be tested on the iOS Simulator **and Linux**. Add a
+  Linux job on official `swift:6.x` Docker images (Ubuntu Jammy + Noble) once a
+  Linux runner / Docker is available, then a GitHub-hosted macOS + Linux matrix.
 - ☐ **[PLAN, later phase]** API-breakage check (`--diagnose-api-breaking-changes`)
   once a baseline tag exists.
 
@@ -101,11 +115,15 @@ warn-once), never the user's telemetry pipeline.
 ## Decisions — RESOLVED
 
 1. **License** — Apache-2.0 ✅ (D5)
-2. **Apple platform floor** — macOS 13 ✅
+2. **Platforms** — iOS 13 / macOS 12 / watchOS 6 / tvOS 13 / visionOS 1 + Linux ✅ (D7)
 3. **Swift tools floor** — 6.0, language mode v6 ✅
 4. **Security contact** — GitHub private vulnerability reporting ✅
 5. **GitHub** — `Stonefly-Labs/stout`, public, `main` ✅ (D5)
-6. **CI** — self-hosted runner interim; hosted Linux+macOS matrix later ✅ (D6)
+6. **CI** — self-hosted runner interim; macOS + iOS-Simulator legs today, Linux leg
+   still TODO; hosted macOS+Linux matrix later ✅ (D6)
+7. **SDK** — build on `opentelemetry-swift-core` (`OpenTelemetryApi`/`OpenTelemetrySdk`),
+   implement its public exporter protocols; dropped swift-log/metrics/distributed-tracing ✅ (D8)
+8. **Transport** — URLSession on Apple / async-http-client on Linux (conditional dep) ✅ (D9)
 
 Still open (non-blocking): gzip strategy [PLAN, spec 01], `.github/` issue/PR
 templates, branch protection (after runner is online).

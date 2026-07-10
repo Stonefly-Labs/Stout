@@ -3,8 +3,9 @@
 // Copyright 2026 Stonefly Labs
 // SPDX-License-Identifier: Apache-2.0
 
-/// The swift-distributed-tracing backend: a `Tracer`/`Instrument` that translates
-/// spans into Breeze `RequestData`/`RemoteDependencyData` envelopes.
+/// The traces exporter: an implementation of opentelemetry-swift's public
+/// `SpanExporter` that translates `SpanData` into Breeze
+/// `RequestData`/`RemoteDependencyData`/`ExceptionData` envelopes.
 ///
-// Placeholder — see docs/speckit/specs/… (Phase 1: Traces).
+// Placeholder — see docs/speckit/specs/… (Phase 1: Traces exporter).
 public enum StoutTracing {}

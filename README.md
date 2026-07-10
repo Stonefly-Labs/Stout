@@ -1,15 +1,19 @@
 # Stout
 
-> Collector-free Azure Monitor / Application Insights exporter for server-side Swift
+> Collector-free Azure Monitor / Application Insights exporter for
+> [opentelemetry-swift](https://github.com/open-telemetry/opentelemetry-swift) — for
+> iOS, macOS, watchOS, tvOS, and Linux
 
-Stout lets a server-side Swift service send **traces, logs, and metrics directly**
-to Azure Monitor / Application Insights — no OpenTelemetry Collector and no Azure
-Monitor Agent in between. It plugs into the Swift Server Working Group observability
-facades ([swift-log](https://github.com/apple/swift-log),
-[swift-metrics](https://github.com/apple/swift-metrics), and
-[swift-distributed-tracing](https://github.com/apple/swift-distributed-tracing)),
-so existing instrumentation (Vapor, Hummingbird, gRPC-swift, …) lights up for free,
-and translates telemetry into Application Insights' "Breeze" ingestion schema.
+Stout lets a Swift app or service send **traces, logs, and metrics directly** to
+Azure Monitor / Application Insights — no OpenTelemetry Collector and no Azure
+Monitor Agent in between. It is an **exporter for the OpenTelemetry Swift SDK**
+([opentelemetry-swift](https://github.com/open-telemetry/opentelemetry-swift)):
+you instrument your app with `opentelemetry-swift`, register Stout's exporters, and
+your existing OTel instrumentation (URLSession HTTP spans, MetricKit, Vapor,
+Hummingbird, gRPC-swift, …) lights up for free. Stout implements
+`opentelemetry-swift`'s public `SpanExporter` / `MetricExporter` / `LogRecordExporter`
+and translates the telemetry into Application Insights' "Breeze" ingestion schema —
+the same model as .NET's `Azure.Monitor.OpenTelemetry.Exporter`.
 
 ## Status
 
@@ -19,15 +23,17 @@ compiles, but no telemetry is exported yet. APIs are unstable and will change be
 
 ## Planned features
 
-- **Traces** — a `swift-distributed-tracing` backend mapping spans to Application
-  Insights request/dependency telemetry, with W3C `traceparent` propagation.
-- **Logs** — a `swift-log` `LogHandler` mapping log records to message/exception
+- **Traces** — a `SpanExporter` mapping OTel spans to Application Insights
+  request/dependency/exception telemetry, with trace correlation.
+- **Logs** — a `LogRecordExporter` mapping OTel log records to message/exception
   telemetry with span correlation.
-- **Metrics** — a `swift-metrics` `MetricsFactory` mapping counters, gauges, and
-  histograms to Application Insights metric telemetry.
+- **Metrics** — a `MetricExporter` mapping OTel counters, gauges, and histograms to
+  Application Insights metric telemetry.
 - **Live Metrics** — the Azure Monitor QuickPulse live-stream side-channel.
-- **Distro** — a one-call bootstrap from an Application Insights connection string,
-  plus an optional [swift-service-lifecycle](https://github.com/swift-server/swift-service-lifecycle)
+- **Distro** — a one-call bootstrap that configures the `opentelemetry-swift`
+  providers and registers Stout's exporters from an Application Insights connection
+  string, plus an optional server-side
+  [swift-service-lifecycle](https://github.com/swift-server/swift-service-lifecycle)
   integration.
 
 ## Installation
@@ -58,10 +64,17 @@ what you import.
 
 ## Platform support
 
-- **macOS 13+** (Apple platforms)
-- **Linux** (the primary server target)
+Stout runs everywhere `opentelemetry-swift` runs:
 
-This is a server-side library: there is no iOS / tvOS / watchOS support.
+- **iOS 13+**
+- **macOS 12+**
+- **watchOS**
+- **tvOS**
+- **visionOS**
+- **Linux**
+
+On Apple platforms the transport uses `URLSession`; on Linux it uses
+[async-http-client](https://github.com/swift-server/async-http-client).
 
 ## Documentation
 
