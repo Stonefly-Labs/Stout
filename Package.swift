@@ -9,13 +9,18 @@ import PackageDescription
 
 let package = Package(
   name: "stout",
-  // Server-side only: macOS floor for Apple platforms; Linux supported implicitly.
-  // No iOS/tvOS/watchOS — this is not a mobile SDK.
+  // Cross-platform: Stout is an exporter for opentelemetry-swift (design D7/D8),
+  // so the platform floor tracks what opentelemetry-swift supports — iOS, macOS,
+  // watchOS, tvOS (+ visionOS) and Linux. This is NOT a server-only library.
   platforms: [
-    .macOS(.v13)
+    .iOS(.v13),
+    .macOS(.v12),
+    .watchOS(.v6),
+    .tvOS(.v13),
+    .visionOS(.v1),
   ],
   products: [
-    // Umbrella distro — one-call bootstrap over all signal modules.
+    // Umbrella distro — configures the OTel providers + registers Stout exporters.
     .library(name: "Stout", targets: ["Stout"]),
     // Individual signal modules so consumers import only what they need.
     .library(name: "StoutCore", targets: ["StoutCore"]),
@@ -27,10 +32,16 @@ let package = Package(
     .library(name: "StoutServiceLifecycle", targets: ["StoutServiceLifecycle"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
-    .package(url: "https://github.com/apple/swift-metrics.git", from: "2.5.0"),
-    .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.1.0"),
+    // OpenTelemetry Swift SDK — the minimal split-out core package
+    // (open-telemetry/opentelemetry-swift-core). It exposes the public
+    // OpenTelemetryApi + OpenTelemetrySdk products that carry the
+    // SpanExporter / MetricExporter / LogRecordExporter protocols and the
+    // SpanData / ReadableLogRecord / MetricData types we translate to Breeze.
+    // Using the -core package avoids pulling OTLP / gRPC / protobuf.
+    .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.5.0"),
+    // Transport on Linux only — Apple platforms use URLSession (Foundation), no dep.
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.21.0"),
+    // Optional server-side graceful shutdown — StoutServiceLifecycle target only.
     .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.6.0"),
   ],
   targets: [
@@ -38,32 +49,35 @@ let package = Package(
     .target(
       name: "StoutCore",
       dependencies: [
-        .product(name: "AsyncHTTPClient", package: "async-http-client"),
-        // swift-log here is for the library's INTERNAL diagnostics only,
-        // never the user's telemetry pipeline (design D1).
-        .product(name: "Logging", package: "swift-log"),
+        .product(name: "OpenTelemetrySdk", package: "opentelemetry-swift-core"),
+        // Linux transport only — on Apple platforms StoutCore uses URLSession.
+        .product(
+          name: "AsyncHTTPClient",
+          package: "async-http-client",
+          condition: .when(platforms: [.linux])
+        ),
       ]
     ),
-    // MARK: - Signal modules
+    // MARK: - Signal modules (implement the public OTel exporter protocols)
     .target(
       name: "StoutTracing",
       dependencies: [
         "StoutCore",
-        .product(name: "Tracing", package: "swift-distributed-tracing"),
+        .product(name: "OpenTelemetrySdk", package: "opentelemetry-swift-core"),
       ]
     ),
     .target(
       name: "StoutLogging",
       dependencies: [
         "StoutCore",
-        .product(name: "Logging", package: "swift-log"),
+        .product(name: "OpenTelemetrySdk", package: "opentelemetry-swift-core"),
       ]
     ),
     .target(
       name: "StoutMetrics",
       dependencies: [
         "StoutCore",
-        .product(name: "Metrics", package: "swift-metrics"),
+        .product(name: "OpenTelemetrySdk", package: "opentelemetry-swift-core"),
       ]
     ),
     .target(
@@ -79,11 +93,11 @@ let package = Package(
         "StoutTracing",
         "StoutLogging",
         "StoutMetrics",
-        "StoutLiveMetrics",
       ]
     ),
     // MARK: - Optional ServiceLifecycle integration (design D3)
-    // The ONLY target that depends on swift-service-lifecycle.
+    // The ONLY target that depends on swift-service-lifecycle. Server-side use;
+    // iOS/Apple apps use app-lifecycle hooks instead.
     .target(
       name: "StoutServiceLifecycle",
       dependencies: [

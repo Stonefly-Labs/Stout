@@ -3,8 +3,9 @@
 // Copyright 2026 Stonefly Labs
 // SPDX-License-Identifier: Apache-2.0
 
-/// The swift-log backend: a `LogHandler` that translates log records into Breeze
+/// The logs exporter: an implementation of opentelemetry-swift's public
+/// `LogRecordExporter` that translates log records into Breeze
 /// `MessageData`/`ExceptionData` envelopes.
 ///
-// Placeholder — see docs/speckit/specs/… (Phase 2: Logs).
+// Placeholder — see docs/speckit/specs/… (Phase 2: Logs exporter).
 public enum StoutLogging {}

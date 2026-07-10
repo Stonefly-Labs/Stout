@@ -5,9 +5,12 @@ description: Canonical reference for the Application Insights "Breeze" ingestion
 # Breeze Ingestion Schema Reference
 
 THE canonical reference for the Application Insights **Breeze** wire format that
-Stout translates telemetry into. Get this exactly right so implementers and
-reviewers do not re-derive it. Grounded in `docs/design.md` §2 (transport) and §6
-(translation table), and the MIT-licensed .NET exporter at
+Stout translates telemetry into. The OTel input types being translated
+(`SpanData` / `ReadableLogRecord` / `MetricData`) come from **`opentelemetry-swift`** —
+Stout implements its public `SpanExporter` / `LogRecordExporter` / `MetricExporter`
+(D8). Get this exactly right so implementers and reviewers do not re-derive it.
+Grounded in `docs/design.md` §2 (transport) and §6 (translation table), and the
+MIT-licensed .NET exporter at
 `Azure/azure-sdk-for-net` →
 `sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/src/Internals/`
 (`SchemaConstants.cs` for the `/track` path and constants, `TraceHelper.cs` for
@@ -60,7 +63,7 @@ Each line is one **envelope**. Fields:
 | `ai.cloud.role` | `service.name` / `service.namespace` |
 | `ai.cloud.roleInstance` | `service.instance.id` / `host.name` |
 | `ai.internal.sdkVersion` | **`stout:<version>`** (Stout's SDK-version string) |
-| `ai.user.id`, `ai.session.id`, ... | optional, generally unused server-side |
+| `ai.user.id`, `ai.session.id`, `ai.device.*`, `ai.application.ver` | optional; populated on-device from the OTel resource when available |
 
 Envelope skeleton (illustrative):
 
@@ -145,10 +148,11 @@ attributes:
 
 **Span events / logs / metrics:**
 - `exception` event → `ExceptionData`; other events → `MessageData`.
-- `LogHandler` records → `MessageData` (or `ExceptionData` when an error is
-  attached); map log level → `severityLevel`; correlate to the active span via
+- `ReadableLogRecord` → `MessageData` (or `ExceptionData` when an error is
+  attached); map OTel severity → `severityLevel`; correlate to the owning span via
   `ai.operation.id`/`ai.operation.parentId`.
-- Metrics → `MetricData` (value/count/min/max for histograms); dimensions →
+- `MetricData` → `MetricData` envelope (value/count/min/max for histograms);
+  dimensions →
   `properties`; bounded cardinality via the overflow bucket
   `{otel.metric.overflow = true}` (decision D4).
 

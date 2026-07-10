@@ -5,19 +5,28 @@ Guidance for Claude Code when working in this repository.
 ## What this is
 
 **Stout** is a **collector-free** Azure Monitor / Application Insights telemetry
-exporter for **server-side Swift** (Linux + macOS, Swift 6). It lets a Swift
-service send traces, metrics, and logs **directly** to Application Insights — no
-OpenTelemetry Collector, no Azure Monitor Agent — the way the .NET/Java/Node/Python
-Azure Monitor distros do.
+**exporter for `opentelemetry-swift`** (the OpenTelemetry Swift SDK). It runs
+everywhere `opentelemetry-swift` runs — **iOS, macOS, watchOS, tvOS (+ visionOS),
+and Linux** — not server-side only. It lets a Swift app or service send traces,
+metrics, and logs **directly** to Application Insights — no OpenTelemetry
+Collector, no Azure Monitor Agent — the same model as the .NET
+`Azure.Monitor.OpenTelemetry.Exporter`.
+
+The front door is `opentelemetry-swift`: consumers instrument their app with the
+OpenTelemetry Swift SDK, and Stout implements its **public**
+`SpanExporter` / `MetricExporter` / `LogRecordExporter` protocols and translates the
+OTel data to the Application Insights **"Breeze"** schema. Swift 6.
 
 Public OSS library, **Apache-2.0**, at `Stonefly-Labs/Stout`. Pre-release: Phase 0
-(scaffold) is done; feature work runs through Spec Kit.
+(scaffold) is done and being re-platformed for iOS + all-Apple + Linux; feature work
+runs through Spec Kit.
 
 ## Prime directive
 
 **Security, stability, and quality are the #1 priorities at all times — over speed
-or feature count.** This is a public library that handles credentials and runs in
-customers' production services. Non-negotiable:
+or feature count.** This is a public library that handles credentials and runs
+inside customers' apps and production services — including **on end-user devices**.
+Non-negotiable:
 
 - **Secrets** (connection strings, instrumentation keys, Entra tokens) are NEVER
   logged, NEVER in error messages, NEVER in the library's own self-diagnostics or
@@ -31,17 +40,30 @@ customers' production services. Non-negotiable:
 
 Full governing principles: `docs/speckit/constitution.md`. Every PR must uphold them.
 
-## Architecture — approach "B2" (full detail in `docs/design.md`)
+## Architecture — exporter for opentelemetry-swift (D8; full detail in `docs/design.md`)
 
-We do **NOT** depend on swift-otel (its exporter protocols are internal/not public).
-Instead we implement the **Swift Server Working Group observability facades directly**
-and own the SDK layer:
+We build **on `opentelemetry-swift`** (the OpenTelemetry Swift SDK), implementing its
+**public** exporter protocols — the same model as .NET's
+`Azure.Monitor.OpenTelemetry.Exporter`:
 
-- Backends we implement: `Tracer` (swift-distributed-tracing), `MetricsFactory`
-  (swift-metrics), `LogHandler` (swift-log).
-- We own: the batching pipeline, resource detection, and transport.
-- We translate facade data → Application Insights **"Breeze"** envelopes → gzip
-  newline-JSON → `POST {IngestionEndpoint}/v2.1/track`.
+- Front door: the consumer instruments with `opentelemetry-swift`
+  (`TracerProvider` / `LoggerProvider` / `MeterProvider`) and registers Stout's
+  exporters. `opentelemetry-swift` supplies the on-device Darwin instrumentations
+  (URLSession HTTP spans, MetricKit, NetworkStatus, sessions); server users add
+  their own. Stout is the **exporter**, not an instrumentation library.
+- Exporters we implement: `SpanExporter`, `MetricExporter`, `LogRecordExporter`
+  (all public in `opentelemetry-swift`) — no forking, no internal-API wall.
+- We own: resource detection, the export pipeline, and transport.
+- We translate OTel data (`SpanData` / `ReadableLogRecord` / `MetricData`) →
+  Application Insights **"Breeze"** envelopes → gzip newline-JSON →
+  `POST {IngestionEndpoint}/v2.1/track`.
+
+> This **supersedes the earlier "B2 / SSWG-facades" design** (implementing
+> `swift-log` / `swift-metrics` / `swift-distributed-tracing` backends for a
+> server-only lib) — those facades don't fit iOS. See `design.md` §3, §11 D8.
+> Do NOT reintroduce the swift-log/metrics/distributed-tracing facade dependencies.
+> Trade-off (accepted): in `opentelemetry-swift`, Traces are Stable but Logs/Metrics
+> are Beta/Development — we phase **traces-first** and knowingly ride the beta APIs.
 
 Key facts:
 - Breeze envelope `ver` = 1 (omitted on wire); each `data.baseData.ver` = 2.
@@ -55,22 +77,34 @@ Key facts:
 
 ## Module graph
 
-| Module | Role |
-|---|---|
-| `StoutCore` | config/secrets, Breeze envelope model, batch pipeline, resource detection, transport (deps: async-http-client; swift-log for internal diagnostics only) |
-| `StoutTracing` | `Tracer` backend + span→Request/Dependency translation + W3C propagation |
-| `StoutLogging` | `LogHandler` backend + Message/Exception + trace correlation |
-| `StoutMetrics` | `MetricsFactory` backend → MetricData |
-| `StoutLiveMetrics` | QuickPulse real-time channel (separate) |
-| `Stout` | umbrella one-call distro bootstrap |
-| `StoutServiceLifecycle` | optional additive target — the ONLY place swift-service-lifecycle is a dependency |
+Common deps: `OpenTelemetrySdk` (from `opentelemetry-swift`, for the exporter
+protocols + `SpanData`/`ReadableLogRecord`/`MetricData`), and the transport split —
+**URLSession** (Foundation) on Apple, **async-http-client** on Linux only
+(conditional). No swift-log/metrics/distributed-tracing facades.
+
+| Module | Role | Key deps |
+|---|---|---|
+| `StoutCore` | config/secrets, Breeze envelope model, shared translation, transport abstraction, resource detection, internal diagnostics | `OpenTelemetrySdk`; URLSession (Foundation); `async-http-client` (Linux only, conditional) |
+| `StoutTracing` | `SpanExporter` → Request/Dependency/Exception translation | `StoutCore`, `OpenTelemetrySdk` |
+| `StoutLogging` | `LogRecordExporter` → Message/Exception + trace correlation | `StoutCore`, `OpenTelemetrySdk` |
+| `StoutMetrics` | `MetricExporter` → MetricData | `StoutCore`, `OpenTelemetrySdk` |
+| `StoutLiveMetrics` | QuickPulse real-time channel (separate) | `StoutCore` |
+| `Stout` | umbrella: configure the OTel providers + register Stout exporters from a connection string | the three + core |
+| `StoutServiceLifecycle` | optional additive **server-side** target — the ONLY place swift-service-lifecycle is a dependency (iOS uses app-lifecycle hooks) |
 
 ## Locked decisions
 
-`docs/design.md §11` (D1–D6): D1 drain-and-go-inert shutdown (handlers go inert,
+`docs/design.md §11` (D1–D9): D1 drain-and-go-inert shutdown (exporters go inert,
 post-shutdown emit dropped after one internal-diagnostics warning); D2 `/v2.1/track`;
-D3 ServiceLifecycle optional-only; D4 delta metrics + idle-emit-nothing +
-overflow-bucket cardinality; D5 name/license/org; D6 self-hosted CI (interim).
+D3 ServiceLifecycle optional-only (server-side; iOS uses app lifecycle); D4 delta
+metrics + idle-emit-nothing + overflow-bucket cardinality; D5 name/license/org;
+D6 self-hosted CI interim (must add iOS-simulator + Linux legs); **D7 platforms —
+iOS + macOS + watchOS + tvOS (+ visionOS) + Linux, not server-only**; **D8 SDK —
+build on `opentelemetry-swift`, implement its public
+`SpanExporter`/`MetricExporter`/`LogRecordExporter`, translate to Breeze; supersedes
+B2 (SSWG facades)**; **D9 transport — one `Sendable` abstraction: URLSession on
+Apple, async-http-client on Linux (`#if canImport(FoundationNetworking)`); we gzip
+request bodies; background upload Apple-only**.
 
 ## Development workflow — Spec Kit (commands are **hyphenated**)
 
@@ -89,7 +123,9 @@ swift format lint --strict --recursive Sources Tests   # must pass; 2-space inde
 ```
 
 Tests currently use XCTest. Targets Swift tools 6.0, language mode v6, strict
-concurrency complete.
+concurrency complete. **Testing must cover the iOS Simulator AND Linux**, not just
+macOS — platform-specific transport (URLSession vs async-http-client) and Foundation
+differences are real.
 
 ## Git & CI
 
@@ -97,16 +133,19 @@ concurrency complete.
   (0 approvals; you can self-merge). Linear history; no force-push/deletion.
 - Required checks: **Build & Test** + **Lint (swift-format)**; branch must be
   up to date.
-- CI runs on a **self-hosted** runner (interim, macOS-only for now). **Linux
-  coverage is a known TODO** and matters — this is a server-side lib (Glibc,
-  swift-corelibs-foundation, NIO transport differences).
+- CI runs on a **self-hosted** runner (interim, macOS-only for now). It **must add
+  iOS-simulator + Linux legs** — macOS alone is insufficient. iOS matters (the whole
+  point is on-device) and Linux matters (Glibc, swift-corelibs-foundation,
+  async-http-client transport differences).
 - End commit messages with:
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 
 ## Gotchas
 
-- Do not reintroduce a swift-otel dependency or a collector — collector-free is the
-  entire point.
+- Do not reintroduce a collector or a gateway — collector-free (direct-to-Breeze) is
+  the entire point. (We DO depend on `opentelemetry-swift` for its exporter
+  protocols; we do NOT reintroduce the swift-log/metrics/distributed-tracing
+  facades.)
 - Don't conflate the Azure service names ("Azure Monitor", "Application Insights")
   with our `Stout*` modules, or the .NET reference types.
 - The transport gzip strategy is still open (`[PLAN]` in spec 01): system `zlib` vs

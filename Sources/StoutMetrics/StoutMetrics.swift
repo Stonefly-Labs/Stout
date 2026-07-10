@@ -3,8 +3,9 @@
 // Copyright 2026 Stonefly Labs
 // SPDX-License-Identifier: Apache-2.0
 
-/// The swift-metrics backend: a `MetricsFactory` that translates metrics into Breeze
-/// `MetricData` envelopes (delta values per flush, per design D4).
+/// The metrics exporter: an implementation of opentelemetry-swift's public
+/// `MetricExporter` that translates `MetricData` into Breeze `MetricData`
+/// envelopes (delta values per flush, per design D4).
 ///
-// Placeholder — see docs/speckit/specs/… (Phase 3: Metrics).
+// Placeholder — see docs/speckit/specs/… (Phase 3: Metrics exporter).
 public enum StoutMetrics {}

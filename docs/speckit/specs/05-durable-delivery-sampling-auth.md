@@ -6,9 +6,9 @@ Pass the prompt below to `/speckit.specify`.
 
 ## Overview / Why
 
-`stout` is a collector-free, open-source Azure Monitor / Application Insights exporter for server-side Swift (Linux + macOS, Swift 6). It POSTs telemetry directly to the App Insights ingestion endpoint in the legacy "Breeze" schema. Spec 01 (core ingestion foundation) already delivers the transport, connection-string parsing, partial-success parsing, and **basic in-memory retry with backoff**. That foundation loses telemetry the moment the buffer fills or the process restarts during an outage, only supports instrumentation-key auth, and sends every item.
+`stout` is a collector-free, open-source Azure Monitor / Application Insights exporter built on the **OpenTelemetry Swift SDK (`opentelemetry-swift`)**, running cross-platform on **iOS, macOS, watchOS, tvOS (+ visionOS), and Linux** (Swift 6). It POSTs telemetry directly to the App Insights ingestion endpoint in the legacy "Breeze" schema. Spec 01 (core ingestion foundation) already delivers the transport abstraction (URLSession/async-http-client), connection-string parsing, partial-success parsing, and **basic in-memory retry with backoff**. That foundation loses telemetry the moment the buffer fills or the process restarts (or the app is suspended/terminated on-device) during an outage, only supports instrumentation-key auth, and sends every item.
 
-> Locked design decisions: see design.md §11 (D1–D4). This spec reflects D1 (lifecycle/shutdown: the offline store and delivery components drain-and-go-inert on graceful shutdown — flush/persist pending telemetry, stop the export loop, close the HTTP client — with post-shutdown emission dropped after a single rate-limited internal-diagnostics warning, never via the user telemetry pipeline and never carrying payload or secrets).
+> Locked design decisions: see design.md §11 (D1–D4, D7–D9). This spec reflects D1 (lifecycle/shutdown: the offline store and delivery components drain-and-go-inert on graceful shutdown — flush/persist pending telemetry, stop the export loop, close the HTTP client — with post-shutdown emission dropped after a single rate-limited internal-diagnostics warning, never via the user telemetry pipeline and never carrying payload or secrets) and D7 (cross-platform: the offline store must respect **bounded on-device disk** and honor **app-suspension flush** on Apple platforms).
 
 This feature is the **hardening layer** that makes delivery survivable and secure in real production services. It adds four capabilities on top of the core foundation:
 
@@ -17,7 +17,7 @@ This feature is the **hardening layer** that makes delivery survivable and secur
 3. **Ingestion sampling** — fixed-rate sampling using the Breeze envelope `sampleRate` + `itemCount` fields, with per-operation (per-trace) consistency so a sampled operation keeps its spans and correlated logs together.
 4. **Entra / AAD token authentication** — an alternative to instrumentation-key auth on the ingestion channel, with secure token acquisition and refresh, so a service can authenticate with a managed identity and no instrumentation key.
 
-**Why it matters.** This is a public OSS library that runs inside customers' production services and handles credentials. Telemetry delivery must degrade gracefully: an unreachable backend must never crash the host, block a request thread, exhaust memory, exhaust disk, or leak a secret. Losing ten minutes of telemetry to a transient outage is unacceptable when the fix — a bounded, secret-safe on-disk buffer — is well understood. Managed-identity auth is a hard requirement for many Azure customers who are forbidden from embedding instrumentation keys in configuration.
+**Why it matters.** This is a public OSS library that runs inside customers' production services **and on end-user devices** and handles credentials. Telemetry delivery must degrade gracefully: an unreachable backend must never crash the host, block a request thread, exhaust memory, exhaust (a device's limited) disk, or leak a secret. Losing ten minutes of telemetry to a transient outage is unacceptable when the fix — a bounded, secret-safe on-disk buffer — is well understood. Managed-identity auth is a hard requirement for many Azure customers who are forbidden from embedding instrumentation keys in configuration.
 
 ## Consumer scenarios
 
@@ -42,11 +42,12 @@ This feature is the **hardening layer** that makes delivery survivable and secur
 ### Durable offline store
 - On a transient send failure or outage, unsent telemetry MUST be persisted to a durable on-disk store rather than only held in memory.
 - Persisted telemetry MUST survive host process restarts and be eligible for replay on the next run.
-- The store MUST enforce a **configurable maximum on-disk size** and MUST NOT exceed it; when full, it MUST evict **oldest-first** to admit newer telemetry.
+- The store MUST enforce a **configurable maximum on-disk size** and MUST NOT exceed it; when full, it MUST evict **oldest-first** to admit newer telemetry. On-device (Apple platforms) the disk bound MUST be conservative — the store MUST never contend for an end-user device's limited storage — and MUST be placed in an appropriate, purgeable/cache-class location per platform conventions.
 - When ingestion becomes reachable, persisted telemetry MUST be replayed; successfully accepted items MUST be removed from the store.
 - Replay MUST respect delivery semantics below (429/`Retry-After`, backoff, circuit breaker) and partial-success results from spec 01 (accepted items removed; only genuinely retriable items retained).
 - The store MUST be safe under concurrent producers and the export loop (Swift 6 `Sendable`, no data races) and MUST tolerate a corrupt/partial record from an interrupted write without failing the whole store (skip/quarantine the bad record).
-- Enabling the offline store MUST be opt-in/configurable, including its location and size cap. [NEEDS CLARIFICATION: default enabled-vs-disabled, default size cap (e.g., MB and/or item count), and default on-disk location for Linux vs macOS]
+- Enabling the offline store MUST be opt-in/configurable, including its location and size cap. [NEEDS CLARIFICATION: default enabled-vs-disabled, default size cap (e.g., MB and/or item count), and default on-disk location per platform — Linux, macOS, and the Apple client platforms (iOS/watchOS/tvOS caches/app-container directories).]
+- **App-suspension flush (Apple platforms, D7).** On iOS/watchOS/tvOS the process can be suspended or terminated by the OS at any time. The delivery components MUST support a **best-effort flush-and-persist on app-suspension** (e.g. driven by the distro's app-lifecycle hooks / background-task assertion) so pending telemetry is persisted within the OS's bounded suspension window rather than lost. [NEEDS CLARIFICATION: whether app-suspension flush uses a background `URLSession` upload, a short background-task assertion to persist-only, or both — and its bounded time budget.]
 - On graceful shutdown (D1, drain-and-go-inert), the delivery components MUST flush buffered telemetry best-effort and persist anything still unsent to the offline store (subject to the disk bound) so it survives to the next run, then stop the export loop and close the HTTP client. Shutdown MUST NOT block or crash the host. After shutdown the components are inert: telemetry emitted post-shutdown is dropped and surfaced only via the library's internal diagnostics channel (rate-limited, never via the user telemetry pipeline, never carrying payload or secrets).
 
 ### Advanced delivery semantics
@@ -107,13 +108,13 @@ This feature is the **hardening layer** that makes delivery survivable and secur
 ## Out of scope (sibling specs)
 
 - **Spec 01 — core ingestion foundation:** connection-string parsing, transport, gzip/newline-JSON encoding, partial-success parsing, and the **basic in-memory retry/backoff**. This spec EXTENDS those; it does not redefine them.
-- **Specs 02 / 03 / 04 — signal translations** (traces / logs / metrics facade adapters and span/log/metric → Breeze mapping). This spec consumes their output but does not define translation.
+- **Specs 02 / 03 / 04 — signal translations** (the `SpanExporter` / `LogRecordExporter` / `MetricExporter` implementations and their `SpanData`/`ReadableLogRecord`/`MetricData` → Breeze mapping). This spec consumes their output but does not define translation.
 - **Spec 06 — Live Metrics (QuickPulse) channel and its separate auth.** Live Metrics has its own endpoint, data model, HTTP pipeline, and control-channel auth. Referenced here (its auth also moves to Entra) but specified separately; this spec covers only the **Breeze ingestion channel**.
 - **Spec 07 — distro convenience bootstrap** (one-call setup, optional framework middleware). Configuration surfaces defined here are wired up there but not owned here.
 
 ## Open questions
 
-1. [NEEDS CLARIFICATION] Offline store defaults: enabled or disabled by default; default size cap (bytes and/or item count); default on-disk location for Linux vs macOS; single-writer assumption vs multiple processes sharing a store directory.
+1. [NEEDS CLARIFICATION] Offline store defaults: enabled or disabled by default; default size cap (bytes and/or item count); default on-disk location per platform (Linux, macOS, and the Apple client platforms' caches/app-container directories); single-writer assumption vs multiple processes sharing a store directory.
 2. [NEEDS CLARIFICATION] "Secret-safe at rest" bar: is full encryption of persisted telemetry payloads required, or is secret-exclusion plus restrictive file permissions the accepted standard given payloads are telemetry, not credentials?
 3. [NEEDS CLARIFICATION] Whether metric envelopes are exempt from per-trace ingestion sampling (always sent), matching Azure Monitor's behavior.
 4. [NEEDS CLARIFICATION] Entra credential abstraction: is there a supported Azure Identity credential type for Swift, or do we define a token-provider protocol the consumer implements? Which audience/scope for the ingestion endpoint?

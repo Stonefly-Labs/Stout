@@ -38,9 +38,10 @@ az monitor app-insights component create \
   --kind other
 ```
 
-(`--application-type other` / `--kind other` suit a server-side library rather than
-a web/mobile app. Add `--workspace <workspace-resource-id>` to bind a specific Log
-Analytics workspace.)
+(`--application-type other` / `--kind other` suit a general-purpose exporter library
+targeting any Stout platform — iOS/macOS/watchOS/tvOS or Linux — rather than a
+specific web/mobile app template. Add `--workspace <workspace-resource-id>` to bind a
+specific Log Analytics workspace.)
 
 ## 3. Read the connection string and app id
 

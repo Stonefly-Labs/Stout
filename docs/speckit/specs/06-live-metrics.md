@@ -6,9 +6,9 @@ Pass the prompt below to `/speckit.specify`.
 
 ## Overview / Why
 
-`stout` is a collector-free, open-source Azure Monitor / Application Insights exporter for server-side Swift (Linux + macOS, Swift 6). Its core signals (traces, logs, metrics) flow through the "Breeze" ingestion pipeline. This feature adds a **completely separate, opt-in capability: real-time "Live Metrics" (a.k.a. Live Stream / QuickPulse) streaming**.
+`stout` is a collector-free, open-source Azure Monitor / Application Insights exporter built on the **OpenTelemetry Swift SDK (`opentelemetry-swift`)**, running cross-platform on **iOS, macOS, watchOS, tvOS (+ visionOS), and Linux** (Swift 6). Its core signals (traces, logs, metrics) flow through the "Breeze" ingestion pipeline. This feature adds a **completely separate, opt-in capability: real-time "Live Metrics" (a.k.a. Live Stream / QuickPulse) streaming**.
 
-Live Metrics is a **proprietary Azure Monitor real-time side-channel — it is NOT OpenTelemetry, NOT OTLP, and NOT part of the Breeze ingestion pipeline.** It shares only the connection string with the rest of the library. When an operator opens the **Live Metrics blade** in the Azure portal for this Application Insights resource, they should see this Swift service's live request rate, dependency rate, exception rate, and CPU/memory-style performance counters updating in near real time (roughly once per second). When the operator closes the blade, the Swift service must detect that nobody is watching and stop streaming.
+Live Metrics is a **proprietary Azure Monitor real-time side-channel — it is NOT OpenTelemetry, NOT OTLP, and NOT part of the Breeze ingestion pipeline.** It shares only the connection string with the rest of the library, and — like the Breeze channel — runs over the same cross-platform transport abstraction (URLSession on Apple, async-http-client on Linux; see design §7, D9). When an operator opens the **Live Metrics blade** in the Azure portal for this Application Insights resource, they should see this Swift service's or app's live request rate, dependency rate, exception rate, and CPU/memory-style performance counters updating in near real time (roughly once per second). When the operator closes the blade, the client must detect that nobody is watching and stop streaming.
 
 **Why this matters:** Live Metrics gives operators a zero-retention, sub-second view of a running service — invaluable during a deploy or an incident, and something the batched Breeze pipeline (seconds-to-minutes latency, sampled, retained) cannot provide. Today no Swift service can appear in the Live Metrics blade at all, because Microsoft ships QuickPulse clients only for .NET, Java, Node.js, and Python.
 
@@ -16,9 +16,9 @@ Live Metrics is a **proprietary Azure Monitor real-time side-channel — it is N
 
 **Scope of v1:** the **ping/post state machine**, streaming of **metrics-only `MonitoringDataPoint` samples** plus a bounded number of sample **`DocumentIngress` documents** (Request / Dependency / Exception), and honoring server-driven control headers. **The client-side filtering DSL is explicitly deferred** (see Out of scope) and must degrade gracefully when the portal pushes a custom filter configuration.
 
-This feature depends on Spec 01 (core config / connection string parsing) **only** for the connection string, from which it reads the `LiveEndpoint`. It is a later phase and its own module.
+This feature depends on Spec 01 (core config / connection string parsing) **only** for the connection string, from which it reads the `LiveEndpoint`, and for the cross-platform transport abstraction (D9). It is a later phase and its own module.
 
-> Locked design decisions: see design.md §11 (D1–D4). This spec reflects D1 (lifecycle/shutdown: the streaming loop goes inert on shutdown and never crashes on post-shutdown activity).
+> Locked design decisions: see design.md §11 (D1–D4, D7–D9). This spec reflects D1 (lifecycle/shutdown: the streaming loop goes inert on shutdown and never crashes on post-shutdown activity), D7 (cross-platform), and D9 (URLSession/async-http-client transport).
 
 ---
 
@@ -71,9 +71,9 @@ This feature depends on Spec 01 (core config / connection string parsing) **only
 
 ### FR-4 Sample data model — `MonitoringDataPoint` (metrics, v1 core)
 - FR-4.1 Each streamed sample MUST be a `MonitoringDataPoint` carrying, at minimum: the service/instance identity (role/instance name), the SDK/agent version, a timestamp, and the set of collected metrics for that ~1-second window.
-- FR-4.2 v1 MUST collect and report the standard Live Metrics default metrics: incoming **request rate**, request duration, request failure rate; outgoing **dependency rate**, dependency duration, dependency failure rate; **exception rate**; and performance counters (**CPU %** and **committed/working-set memory**), to the extent obtainable on Linux and macOS.
-- FR-4.3 Where a performance counter cannot be obtained on a given platform, the sample MUST omit or zero that metric gracefully rather than fail the whole sample. `[NEEDS CLARIFICATION: which perf counters are reliably available on Linux vs macOS server hosts, and the exact metric names/IDs the blade expects.]`
-- FR-4.4 The request / dependency / exception rates streamed here MUST be derived from the same telemetry the host emits via the SSWG facades, so the live view is consistent with what later lands in Breeze. `[NEEDS CLARIFICATION: exact tap-in point — do we observe the shared telemetry buffer, or maintain independent live counters?]`
+- FR-4.2 v1 MUST collect and report the standard Live Metrics default metrics: incoming **request rate**, request duration, request failure rate; outgoing **dependency rate**, dependency duration, dependency failure rate; **exception rate**; and performance counters (**CPU %** and **committed/working-set memory**), to the extent obtainable on each supported platform (Linux, macOS, and the Apple client platforms).
+- FR-4.3 Where a performance counter cannot be obtained on a given platform, the sample MUST omit or zero that metric gracefully rather than fail the whole sample. `[NEEDS CLARIFICATION: which perf counters are reliably available on Linux vs Apple platforms (server and device), and the exact metric names/IDs the blade expects.]`
+- FR-4.4 The request / dependency / exception rates streamed here MUST be derived from the same telemetry the host emits through `opentelemetry-swift`, so the live view is consistent with what later lands in Breeze. `[NEEDS CLARIFICATION: exact tap-in point — do we observe the OTel SDK's span/log/metric stream (or the shared export buffer), or maintain independent live counters?]`
 
 ### FR-5 Sample documents — `DocumentIngress` (samples, v1)
 - FR-5.1 Along with metrics, the post payload MUST be able to include a **bounded** set of sample `DocumentIngress` documents for the window: Request, Dependency, and Exception documents (these populate the blade's live sample-telemetry list).
@@ -146,7 +146,7 @@ This feature depends on Spec 01 (core config / connection string parsing) **only
 - **All Breeze ingestion** — connection-string parsing beyond reading `LiveEndpoint`, envelope model, batch pipeline, `/v2.1/track` transport, partial-success/retry (Specs 01–05). Live Metrics shares only the connection string.
 - **The client-side filtering DSL** — `CollectionConfigurationInfo` / `DerivedMetricInfo` filter parsing and local evaluation. **Explicitly deferred to a future Live Metrics version.** v1 only degrades gracefully and reports unsupported configs.
 - **One-call bootstrap / distro convenience layer** (Spec 07) — that spec merely offers a toggle to enable this feature; it does not define the protocol.
-- **Traces / logs / metrics facade adapters** and their Breeze translation (their own specs).
+- **Traces / logs / metrics exporters** (`SpanExporter`/`LogRecordExporter`/`MetricExporter`) and their Breeze translation (their own specs).
 - **Statsbeat** and any Microsoft-internal usage telemetry.
 
 ---
@@ -155,10 +155,10 @@ This feature depends on Spec 01 (core config / connection string parsing) **only
 
 - Q1 `[NEEDS CLARIFICATION]` Exact request-side header set for ping and post (instance/stream identity, transmission time, machine name, previously-seen ETag advertisement) — confirm against the .NET `LiveMetrics` source.
 - Q2 `[NEEDS CLARIFICATION]` Exact `MonitoringDataPoint` field/JSON shape and the precise metric names/IDs the blade expects for the default metrics.
-- Q3 `[NEEDS CLARIFICATION]` Which performance counters (CPU %, committed/working-set memory) are reliably obtainable on Linux vs macOS server hosts, and how to source them without a heavy dependency.
+- Q3 `[NEEDS CLARIFICATION]` Which performance counters (CPU %, committed/working-set memory) are reliably obtainable on Linux vs Apple platforms (server hosts and devices), and how to source them without a heavy dependency.
 - Q4 `[NEEDS CLARIFICATION]` Exact `DocumentIngress` field set per document type (Request/Dependency/Exception) and any server-imposed per-sample document cap.
 - Q5 `[NEEDS CLARIFICATION]` Exact `CollectionConfigurationError` entry shape expected by the service when reporting an unsupported/deferred configuration.
-- Q6 `[NEEDS CLARIFICATION]` Whether the request/dependency/exception live counters tap the shared SSWG telemetry buffer or maintain independent counters, and how to keep the live view consistent with Breeze.
+- Q6 `[NEEDS CLARIFICATION]` Whether the request/dependency/exception live counters tap the `opentelemetry-swift` span/log/metric stream (or the shared export buffer) or maintain independent counters, and how to keep the live view consistent with Breeze.
 - Q7 `[NEEDS CLARIFICATION]` Entra ID token audience/scope for the LiveEndpoint, and whether v1 must ship Entra auth now or may stage it behind the shared auth seam.
 - Q8 `[NEEDS CLARIFICATION]` Whether the service still accepts instrumentation-key auth for Live Metrics at v1 ship time, given the retirement of key-auth for this channel.
 - Q9 `[NEEDS CLARIFICATION]` Content type / compression expected on `/post` payloads (JSON? gzip?) and whether ping and post share a serialization format.

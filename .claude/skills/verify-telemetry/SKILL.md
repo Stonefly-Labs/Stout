@@ -7,7 +7,10 @@ description: Procedure to prove Stout telemetry actually LANDS end-to-end, since
 Unit tests prove translation logic in isolation; they cannot prove telemetry
 actually reaches Application Insights with correct field mapping. This is the
 procedure to close that gap. Use it after any change that touches envelope
-construction, transport, or a translation table. Both approaches respect the prime
+construction, transport, or a translation table. It applies on every platform Stout
+targets — **run it on the iOS Simulator as well as macOS and Linux**, since the
+transport differs (URLSession on Apple, async-http-client on Linux) and only an
+end-to-end check exercises the real path. Both approaches respect the prime
 directive: never print `iKey` / connection strings / tokens.
 
 Two complementary approaches — do (a) always (fast, deterministic, offline), do
