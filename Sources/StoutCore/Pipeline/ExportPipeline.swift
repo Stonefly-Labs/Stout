@@ -15,15 +15,23 @@ import Foundation
 /// interval (`flushInterval`), encodes the batch to newline-delimited JSON, gzips
 /// it, and POSTs it via the injected `Transport`. A `200` is success.
 ///
+/// Failures are classified and retried with a bounded, in-memory budget: a
+/// retriable whole-response status (or a thrown delivery error) resends the batch
+/// after `Retry-After` or full-jitter backoff; a `206` resends only the retriable
+/// per-item survivors; everything else is dropped with secret-free diagnostics
+/// (US4, FR-024–FR-027).
+///
 /// - Important: The pipeline owns a background flush loop; call `shutdown()` when
-///   done so it stops and any client is released. Reliable retry (US4) and the
-///   full drain-and-go-inert lifecycle with the single post-shutdown warning
-///   (US5) extend this type in later work.
+///   done so it stops and any client is released. The full drain-and-go-inert
+///   lifecycle with the single post-shutdown warning (US5) extends this type in
+///   later work.
 public actor ExportPipeline {
   private let configuration: ExporterConfiguration
   private let trackURL: URL
   private let transport: any Transport
   private let diagnostics: any Diagnostics
+  private let retryPolicy: RetryPolicy
+  private var randomGenerator = SystemRandomNumberGenerator()
 
   private var buffer: [Envelope] = []
   private var droppedCountStorage: UInt64 = 0
@@ -61,6 +69,7 @@ public actor ExportPipeline {
     self.trackURL = IngestionPath.trackURL(for: ingestionEndpoint)
     self.transport = transport
     self.diagnostics = diagnostics
+    self.retryPolicy = RetryPolicy(configuration: configuration)
   }
 
   /// The number of envelopes dropped so far (overflow or post-shutdown), for
@@ -156,38 +165,123 @@ public actor ExportPipeline {
     }
   }
 
+  /// The classified outcome of a single POST attempt.
+  private enum SendOutcome {
+    /// `200` — the whole batch was accepted.
+    case success
+    /// A retriable whole-response status, timeout, or connection error — resend
+    /// the current `pending` batch after a delay.
+    case retriableWhole
+    /// A non-retriable whole-response status — drop the batch permanently.
+    case permanentWhole
+    /// `206` partial success — resend `retriable` survivors; `droppedCount`
+    /// errored items are non-retriable and dropped.
+    case partial(retriable: [Envelope], droppedCount: Int)
+  }
+
+  /// Encode, compress, POST, and classify — retrying retriable failures with a
+  /// bounded, in-memory budget (FR-025/FR-026/FR-027). Never throws into the host
+  /// and never grows retry state past one batch (FR-031).
   private func send(_ batch: [Envelope]) async {
     guard !batch.isEmpty else { return }
-    do {
-      let body = try EnvelopeEncoding.encodeBatch(batch)
-      let compressed = try gzip([UInt8](body))
-      let request = TransportRequest(
-        url: trackURL,
-        method: "POST",
-        headers: Self.requestHeaders,
-        body: Data(compressed)
-      )
-      let response = try await transport.send(request)
-      if response.statusCode == 200 {
-        return  // fully accepted
+    var pending = batch
+    var attempt = 0
+
+    while !pending.isEmpty {
+      let body: Data
+      do {
+        body = Data(try gzip([UInt8](try EnvelopeEncoding.encodeBatch(pending))))
+      } catch {
+        // Encoding/compression failure: unrecoverable and content-independent —
+        // drop without a retry (retrying re-fails identically). Secret-free.
+        dropPermanently(pending.count, code: .transportFailure)
+        return
       }
-      // Non-200: retry/partial-success classification is US4. For the MVP spine
-      // the batch is dropped with secret-free accounting.
-      droppedCountStorage &+= UInt64(batch.count)
-      diagnostics.report(
-        DiagnosticEvent(
-          severity: .warning,
-          code: .ingestionRejected,
-          itemCount: UInt64(batch.count)
-        )
-      )
-    } catch {
-      // Encoding/compression/transport failure: never propagate to the host
-      // (FR-031). Retry is US4; for now the batch is dropped.
-      droppedCountStorage &+= UInt64(batch.count)
-      diagnostics.report(
-        DiagnosticEvent(severity: .warning, code: .transportFailure)
-      )
+
+      let request = TransportRequest(
+        url: trackURL, method: "POST", headers: Self.requestHeaders, body: body)
+      let response = try? await transport.send(request)
+      // A thrown/absent response is a delivery failure → retriable whole (FR-025).
+      let outcome = response.map { classify($0, pending: pending) } ?? .retriableWhole
+      let retryAfterHeader = response.flatMap { Self.header("Retry-After", in: $0.headers) }
+
+      switch outcome {
+      case .success:
+        return
+      case .permanentWhole:
+        dropPermanently(pending.count, code: .permanentDrop)
+        return
+      case .partial(let retriable, let droppedCount):
+        if droppedCount > 0 { dropPermanently(droppedCount, code: .permanentDrop) }
+        pending = retriable
+        if pending.isEmpty { return }
+      case .retriableWhole:
+        break  // resend the whole `pending` batch
+      }
+
+      // Reached only when `pending` still needs delivery. Enforce the bounded
+      // in-memory attempt budget; on exhaustion, drop what's left secret-free.
+      guard retryPolicy.canRetry(afterAttempt: attempt) else {
+        dropPermanently(pending.count, code: .permanentDrop)
+        return
+      }
+      let delay =
+        retryPolicy.retryAfterDelay(headerValue: retryAfterHeader, now: Date())
+        ?? retryPolicy.jitteredDelay(forAttempt: attempt, using: &randomGenerator)
+      if delay > 0 {
+        try? await Task.sleep(nanoseconds: UInt64((delay * 1_000_000_000).rounded()))
+      }
+      // If shutdown began during the backoff, stop retrying and drop the
+      // remainder — the best-effort drain must not hang (refined in US5).
+      guard state == .running else {
+        dropPermanently(pending.count, code: .permanentDrop)
+        return
+      }
+      attempt += 1
     }
+  }
+
+  /// Classify one HTTP response against the current `pending` batch.
+  private func classify(_ response: TransportResponse, pending: [Envelope]) -> SendOutcome {
+    switch response.statusCode {
+    case 200:
+      return .success
+    case 206:
+      guard let parsed = IngestionResponse.parse(response.body) else {
+        // A `206` we cannot parse: we can't tell which items to keep, so resend
+        // the whole batch (bounded by the attempt budget) rather than lose all.
+        return .retriableWhole
+      }
+      var retriable: [Envelope] = []
+      var droppedCount = 0
+      for error in parsed.errors {
+        guard error.index >= 0, error.index < pending.count else { continue }
+        if retryPolicy.isPerItemRetriable(error.statusCode) {
+          retriable.append(pending[error.index])
+        } else {
+          droppedCount += 1
+        }
+      }
+      return .partial(retriable: retriable, droppedCount: droppedCount)
+    default:
+      return retryPolicy.isWholeResponseRetriable(response.statusCode)
+        ? .retriableWhole : .permanentWhole
+    }
+  }
+
+  /// Account for `count` permanently dropped items and surface a secret-free
+  /// diagnostic carrying only the magnitude (FR-025/FR-028/FR-031).
+  private func dropPermanently(_ count: Int, code: DiagnosticEvent.Code) {
+    guard count > 0 else { return }
+    droppedCountStorage &+= UInt64(count)
+    diagnostics.report(
+      DiagnosticEvent(severity: .warning, code: code, itemCount: UInt64(count)))
+  }
+
+  /// Case-insensitive header lookup (HTTP header names are case-insensitive).
+  private static func header(_ name: String, in headers: [String: String]) -> String? {
+    if let exact = headers[name] { return exact }
+    let lowered = name.lowercased()
+    return headers.first { $0.key.lowercased() == lowered }?.value
   }
 }

@@ -19,19 +19,35 @@ struct TestData: BaseData {
 
 // MARK: - Mock transport
 
-/// A recording, controllable `Transport`. Captures every request, returns a
-/// configurable status, and can stall (to exercise backpressure) until released.
+/// One scripted transport outcome: either an HTTP response or a delivery failure.
+enum MockOutcome: Sendable {
+  case respond(statusCode: Int, headers: [String: String] = [:], body: Data = Data())
+  case fail(any Error)
+}
+
+/// A trivial delivery error for exercising the retriable throw path.
+struct MockTransportError: Error, Sendable {}
+
+/// A recording, controllable `Transport`. Captures every request, replays a
+/// scripted sequence of outcomes (the last repeats once exhausted), and can stall
+/// (to exercise backpressure) until released.
 actor MockTransport: Transport {
   private(set) var requests: [TransportRequest] = []
   private(set) var shutdownCalled = false
-  private var statusCode: Int
-  private var responseBody: Data
+  private var script: [MockOutcome]
+  private var scriptIndex = 0
   private var stall = false
   private var waiters: [CheckedContinuation<Void, Never>] = []
 
+  /// Always return a single fixed status/body (the common case).
   init(statusCode: Int = 200, responseBody: Data = Data()) {
-    self.statusCode = statusCode
-    self.responseBody = responseBody
+    self.script = [.respond(statusCode: statusCode, body: responseBody)]
+  }
+
+  /// Replay `script` in order; the final outcome repeats for any further calls.
+  init(script: [MockOutcome]) {
+    precondition(!script.isEmpty, "MockTransport script must not be empty")
+    self.script = script
   }
 
   func send(_ request: TransportRequest) async throws -> TransportResponse {
@@ -39,7 +55,14 @@ actor MockTransport: Transport {
     if stall {
       await withCheckedContinuation { waiters.append($0) }
     }
-    return TransportResponse(statusCode: statusCode, headers: [:], body: responseBody)
+    let outcome = script[min(scriptIndex, script.count - 1)]
+    scriptIndex += 1
+    switch outcome {
+    case .respond(let statusCode, let headers, let body):
+      return TransportResponse(statusCode: statusCode, headers: headers, body: body)
+    case .fail(let error):
+      throw error
+    }
   }
 
   func shutdown() async {
