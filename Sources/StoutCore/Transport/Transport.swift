@@ -59,4 +59,20 @@ public struct TransportResponse: Sendable {
 public protocol Transport: Sendable {
   /// Send one request and return its response, or throw on a delivery failure.
   func send(_ request: TransportRequest) async throws -> TransportResponse
+
+  /// Release any client resources. Called once when the pipeline drains and goes
+  /// inert (FR-015). Defaults to a no-op for stateless transports.
+  func shutdown() async
+}
+
+extension Transport {
+  public func shutdown() async {}
+}
+
+/// A transport-layer failure that is not itself an HTTP response (e.g. a
+/// non-HTTP reply). Carries no request/response payload, so it is safe to
+/// classify and surface through diagnostics (FR-028).
+public enum TransportError: Error, Sendable, Equatable {
+  /// The reply was not an HTTP response.
+  case nonHTTPResponse
 }
