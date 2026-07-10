@@ -7,6 +7,24 @@
 
 import PackageDescription
 
+// On Linux, StoutCore gzips request bodies through the system zlib (`zlib1g`)
+// via a `.systemLibrary` shim target (see Sources/CZlib). On Apple platforms the
+// SDK already vends a `zlib` module, so no extra target is needed there. Keeping
+// the target and dependency Linux-only avoids an Apple-side modulemap clash.
+#if os(Linux)
+let cZlibTargets: [Target] = [
+  .systemLibrary(
+    name: "CZlib",
+    pkgConfig: "zlib",
+    providers: [.apt(["zlib1g-dev"])]
+  )
+]
+let cZlibDependencies: [Target.Dependency] = ["CZlib"]
+#else
+let cZlibTargets: [Target] = []
+let cZlibDependencies: [Target.Dependency] = []
+#endif
+
 let package = Package(
   name: "stout",
   // Cross-platform: Stout is an exporter for opentelemetry-swift (design D7/D8),
@@ -56,7 +74,7 @@ let package = Package(
           package: "async-http-client",
           condition: .when(platforms: [.linux])
         ),
-      ]
+      ] + cZlibDependencies
     ),
     // MARK: - Signal modules (implement the public OTel exporter protocols)
     .target(
@@ -113,6 +131,6 @@ let package = Package(
     .testTarget(name: "StoutLiveMetricsTests", dependencies: ["StoutLiveMetrics"]),
     .testTarget(name: "StoutTests", dependencies: ["Stout"]),
     .testTarget(name: "StoutServiceLifecycleTests", dependencies: ["StoutServiceLifecycle"]),
-  ],
+  ] + cZlibTargets,
   swiftLanguageModes: [.v6]
 )
