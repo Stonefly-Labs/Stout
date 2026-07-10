@@ -21,10 +21,16 @@ import Foundation
 /// per-item survivors; everything else is dropped with secret-free diagnostics
 /// (US4, FR-024–FR-027).
 ///
+/// Shutdown follows the **drain-and-go-inert** contract (D1, US5): `shutdown()`
+/// stops accepting new items, drains what is buffered best-effort within a bounded
+/// timeout (`shutdownDrainTimeout`), releases the transport, and leaves the pipeline
+/// **inert**. Once inert, every `submit(_:)` is dropped without crashing or blocking;
+/// the first such post-shutdown submit emits a single rate-limited `postShutdownSubmit`
+/// warning on the diagnostics channel and subsequent ones are silently counted
+/// (FR-015/FR-016, Acc #6).
+///
 /// - Important: The pipeline owns a background flush loop; call `shutdown()` when
-///   done so it stops and any client is released. The full drain-and-go-inert
-///   lifecycle with the single post-shutdown warning (US5) extends this type in
-///   later work.
+///   done so it stops and any client is released.
 public actor ExportPipeline {
   private let configuration: ExporterConfiguration
   private let trackURL: URL
@@ -37,6 +43,8 @@ public actor ExportPipeline {
   private var droppedCountStorage: UInt64 = 0
   private var isSending = false
   private var flushTask: Task<Void, Never>?
+  /// Ensures the post-shutdown-submit warning is emitted at most once (FR-016).
+  private var postShutdownWarningEmitted = false
 
   private enum State {
     case running
@@ -76,6 +84,10 @@ public actor ExportPipeline {
   /// diagnostics and tests (FR-014, SC-003).
   public var droppedCount: UInt64 { droppedCountStorage }
 
+  /// Count of envelopes currently buffered (awaiting flush). Internal observability
+  /// used by tests to synchronize on the fire-and-forget `submit(_:)` path.
+  var bufferedCount: Int { buffer.count }
+
   /// Submit an envelope for export. Non-blocking and never throws into the host:
   /// it hands off to the actor and returns immediately. Dropped on overflow or
   /// once inert (FR-012/FR-014).
@@ -89,26 +101,52 @@ public actor ExportPipeline {
     await flush()
   }
 
-  /// Stop the flush loop, drain best-effort, and release the transport. Idempotent.
-  ///
-  /// This is the minimal lifecycle needed by the MVP; US5 replaces it with the
-  /// full drain-and-go-inert state machine (bounded timeout + single warning).
+  /// Drain-and-go-inert shutdown (D1, US5). Stops the flush loop, drains what is
+  /// buffered best-effort within `shutdownDrainTimeout`, releases the transport, and
+  /// leaves the pipeline inert. Idempotent and non-hanging: a second call (or a call
+  /// while already draining/inert) is a safe no-op, and the bounded timeout
+  /// guarantees the host is never blocked indefinitely (FR-015, Acc #6).
   public func shutdown() async {
     guard state == .running else { return }
+    // Move out of `.running` first so concurrent submits are dropped and the retry
+    // loop stops backing off — the drain must not race new work or hang on retries.
     state = .draining
     flushTask?.cancel()
     flushTask = nil
-    await drainRemaining()
+    await drainWithinTimeout()
     await transport.shutdown()
     state = .inert
+  }
+
+  /// Race the best-effort drain against the configured shutdown timeout so a slow or
+  /// unavailable endpoint can never stall the host past `shutdownDrainTimeout`
+  /// (FR-015). Whichever finishes first wins; the loser is cancelled.
+  private func drainWithinTimeout() async {
+    let timeout = configuration.shutdownDrainTimeout
+    guard timeout > 0 else { return }  // A non-positive budget means "don't block".
+    let nanos = UInt64((timeout * 1_000_000_000).rounded())
+    await withTaskGroup(of: Void.self) { group in
+      group.addTask { await self.drainRemaining() }
+      group.addTask { try? await Task.sleep(nanoseconds: nanos) }
+      await group.next()
+      group.cancelAll()
+    }
   }
 
   // MARK: - Actor-isolated internals
 
   private func enqueue(_ envelope: Envelope) async {
     guard state == .running else {
-      // Post-shutdown submit: drop. The single rate-limited warning is US5.
+      // Drain-and-go-inert (FR-015/FR-016): once shutting down or inert, new items
+      // are dropped rather than accepted. The first such submit surfaces a single
+      // rate-limited, secret-free `postShutdownSubmit` warning; subsequent ones are
+      // silently counted so a busy host can't spam the diagnostics channel.
       droppedCountStorage &+= 1
+      if !postShutdownWarningEmitted {
+        postShutdownWarningEmitted = true
+        diagnostics.report(
+          DiagnosticEvent(severity: .warning, code: .postShutdownSubmit, itemCount: 1))
+      }
       return
     }
     guard buffer.count < configuration.bufferCapacity else {
@@ -158,7 +196,9 @@ public actor ExportPipeline {
 
   private func drainRemaining() async {
     isSending = false
-    while !buffer.isEmpty {
+    // Stop promptly if the shutdown timeout fires and cancels this task, so a
+    // partially-drained backlog is dropped rather than blocking `shutdown()`.
+    while !buffer.isEmpty, !Task.isCancelled {
       let batch = Array(buffer.prefix(configuration.maxBatchSize))
       buffer.removeFirst(batch.count)
       await send(batch)
@@ -232,7 +272,7 @@ public actor ExportPipeline {
         try? await Task.sleep(nanoseconds: UInt64((delay * 1_000_000_000).rounded()))
       }
       // If shutdown began during the backoff, stop retrying and drop the
-      // remainder — the best-effort drain must not hang (refined in US5).
+      // remainder — the best-effort drain must not hang on retry delays (FR-015).
       guard state == .running else {
         dropPermanently(pending.count, code: .permanentDrop)
         return
