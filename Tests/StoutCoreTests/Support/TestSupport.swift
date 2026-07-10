@@ -37,7 +37,10 @@ actor MockTransport: Transport {
   private var script: [MockOutcome]
   private var scriptIndex = 0
   private var stall = false
-  private var waiters: [CheckedContinuation<Void, Never>] = []
+  private var waiters: [CheckedContinuation<Void, Error>] = []
+
+  /// A cancelled stalled request surfaces as a delivery failure.
+  struct Cancelled: Error, Sendable {}
 
   /// Always return a single fixed status/body (the common case).
   init(statusCode: Int = 200, responseBody: Data = Data()) {
@@ -53,7 +56,14 @@ actor MockTransport: Transport {
   func send(_ request: TransportRequest) async throws -> TransportResponse {
     requests.append(request)
     if stall {
-      await withCheckedContinuation { waiters.append($0) }
+      // Honor cancellation while stalled, mirroring URLSession / async-http-client:
+      // a cancelled request stops waiting instead of blocking forever. This lets the
+      // shutdown-timeout drain race actually complete (FR-015).
+      try await withTaskCancellationHandler {
+        try await withCheckedThrowingContinuation { waiters.append($0) }
+      } onCancel: {
+        Task { await self.failStalledWaiters() }
+      }
     }
     let outcome = script[min(scriptIndex, script.count - 1)]
     scriptIndex += 1
@@ -78,6 +88,14 @@ actor MockTransport: Transport {
       waiters.removeAll()
       for waiter in pending { waiter.resume() }
     }
+  }
+
+  /// Resume any stalled waiters with a cancellation error (invoked when the
+  /// awaiting task is cancelled, e.g. by the shutdown-timeout race).
+  private func failStalledWaiters() {
+    let pending = waiters
+    waiters.removeAll()
+    for waiter in pending { waiter.resume(throwing: Cancelled()) }
   }
 
   var requestCount: Int { requests.count }
