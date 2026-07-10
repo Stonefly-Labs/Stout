@@ -65,11 +65,11 @@ Swift library (SwiftPM). Sources in `Sources/StoutCore/`, tests in `Tests/StoutC
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] Write `ConnectionStringTests` in `Tests/StoutCoreTests/ConnectionStringTests.swift`: valid string → correct GUID iKey + normalized ingestion/live endpoints + well-formed `{endpoint}/v2.1/track`; case-insensitive keys; optional fields retained; each invalid variant (missing iKey, malformed GUID, non-HTTPS, malformed URL, duplicate key, empty) → matching `ConnectionStringError` whose `description` contains NO secret; endpoint precedence explicit → suffix `https://[loc.]dc.{suffix}` → default `https://dc.services.visualstudio.com/` (Acc #1/#2/#11; FR-001–005/028/029).
+- [X] T010 [P] [US1] Write `ConnectionStringTests` in `Tests/StoutCoreTests/ConnectionStringTests.swift`: valid string → correct GUID iKey + normalized ingestion/live endpoints + well-formed `{endpoint}/v2.1/track`; case-insensitive keys; optional fields retained; each invalid variant (missing iKey, malformed GUID, non-HTTPS, malformed URL, duplicate key, empty) → matching `ConnectionStringError` whose `description` contains NO secret; endpoint precedence explicit → suffix `https://[loc.]dc.{suffix}` → default `https://dc.services.visualstudio.com/` (Acc #1/#2/#11; FR-001–005/028/029).
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Implement `ConnectionConfiguration` (parse, validate GUID + HTTPS-only endpoints, normalize trailing slashes, endpoint precedence, retain optional fields) + secret-free `ConnectionStringError` + redacting debug description in `Sources/StoutCore/Configuration/ConnectionConfiguration.swift` (FR-001–005/028/029; make T010 pass).
+- [X] T011 [US1] Implement `ConnectionConfiguration` (parse, validate GUID + HTTPS-only endpoints, normalize trailing slashes, endpoint precedence, retain optional fields) + secret-free `ConnectionStringError` + redacting debug description in `Sources/StoutCore/Configuration/ConnectionConfiguration.swift` (FR-001–005/028/029; make T010 pass).
 
 **Checkpoint**: Connection-string config is fully functional and testable on its own.
 
@@ -83,20 +83,20 @@ Swift library (SwiftPM). Sources in `Sources/StoutCore/`, tests in `Tests/StoutC
 
 ### Tests for User Story 2
 
-- [ ] T012 [P] [US2] `EnvelopeEncodingTests` in `Tests/StoutCoreTests/EnvelopeEncodingTests.swift`: N envelopes → exactly N `\n`-delimited single-line JSON objects; Breeze field names; `time` = UTC ISO-8601 fractional `Z` regardless of TZ/locale; envelope `ver` omitted; `baseData.ver`=2 (Acc #3; FR-006/009; SC-004).
-- [ ] T013 [P] [US2] `GzipRoundTripTests` in `Tests/StoutCoreTests/GzipRoundTripTests.swift`: gzip(body) → decompress → identical bytes; valid gzip header/trailer; runs on Apple + Linux (Acc #3; FR-010; SC-004).
-- [ ] T014 [P] [US2] `PipelineFlushTests` in `Tests/StoutCoreTests/PipelineFlushTests.swift`: submit returns without awaiting network; flush when batch hits 512 AND, separately, when the 5s interval elapses with a partial batch (Acc #4; FR-012/013; SC-001).
-- [ ] T015 [P] [US2] `TransportContractTests` in `Tests/StoutCoreTests/TransportContractTests.swift` with a mock `Transport`: POST `{endpoint}/v2.1/track`, `Content-Type: application/x-json-stream`, `Content-Encoding: gzip`, gzip body; 200 → success (Acc #7; FR-022/023).
-- [ ] T040 [P] [US2] `ConcurrentProducersTests` in `Tests/StoutCoreTests/ConcurrentProducersTests.swift`: many tasks submitting concurrently (below capacity) → buffer never corrupts, no races, all items enqueued and eventually flushed; run under Swift 6 strict concurrency (spec Edge Case "concurrent producers"; FR-012; addresses analysis C2). At-capacity concurrent behavior is covered by T022.
+- [X] T012 [P] [US2] `EnvelopeEncodingTests` in `Tests/StoutCoreTests/EnvelopeEncodingTests.swift`: N envelopes → exactly N `\n`-delimited single-line JSON objects; Breeze field names; `time` = UTC ISO-8601 fractional `Z` regardless of TZ/locale; envelope `ver` omitted; `baseData.ver`=2 (Acc #3; FR-006/009; SC-004).
+- [X] T013 [P] [US2] `GzipRoundTripTests` in `Tests/StoutCoreTests/GzipRoundTripTests.swift`: gzip(body) → decompress → identical bytes; valid gzip header/trailer; runs on Apple + Linux (Acc #3; FR-010; SC-004).
+- [X] T014 [P] [US2] `PipelineFlushTests` in `Tests/StoutCoreTests/PipelineFlushTests.swift`: submit returns without awaiting network; flush when batch hits 512 AND, separately, when the 5s interval elapses with a partial batch (Acc #4; FR-012/013; SC-001).
+- [X] T015 [P] [US2] `TransportContractTests` in `Tests/StoutCoreTests/TransportContractTests.swift` with a mock `Transport`: POST `{endpoint}/v2.1/track`, `Content-Type: application/x-json-stream`, `Content-Encoding: gzip`, gzip body; 200 → success (Acc #7; FR-022/023).
+- [X] T040 [P] [US2] `ConcurrentProducersTests` in `Tests/StoutCoreTests/ConcurrentProducersTests.swift`: many tasks submitting concurrently (below capacity) → buffer never corrupts, no races, all items enqueued and eventually flushed; run under Swift 6 strict concurrency (spec Edge Case "concurrent producers"; FR-012; addresses analysis C2). At-capacity concurrent behavior is covered by T022.
 
 ### Implementation for User Story 2
 
-- [ ] T016 [P] [US2] Implement the system-zlib `gzip(_:) throws -> [UInt8]` wrapper (`deflateInit2_` with `windowBits = MAX_WBITS + 16`, `Z_FINISH` loop, `deflateEnd`; import `zlib` on Apple / `CZlib` on Linux) in `Sources/StoutCore/Compression/Gzip.swift` (FR-010; research.md R1; make T013 pass).
-- [ ] T017 [US2] Implement the batch encoder — single-line JSON per envelope + deterministic UTC ISO-8601 fractional `Z` timestamp formatting + `\n`-join — in `Sources/StoutCore/Envelope/Envelope.swift` (or an `EnvelopeEncoding.swift`) (FR-009; depends on T007; make T012 pass).
-- [ ] T018 [US2] Implement `EnvelopeFactory` — **init takes `instrumentationKey: String` + `TelemetryTags`, NOT `ConnectionConfiguration`** (so US2 needs no US1 code) — stamping `ver`/`name`/`time`/`sampleRate`/`iKey`/`tags` around a caller `baseType`+`baseData` in `Sources/StoutCore/Envelope/EnvelopeFactory.swift` (FR-007; addresses analysis I1; depends on T007, T005).
-- [ ] T019 [P] [US2] Implement `URLSessionTransport` (Apple, `#if !canImport(FoundationNetworking)`) in `Sources/StoutCore/Transport/URLSessionTransport.swift` (FR-022; depends on T009).
-- [ ] T020 [P] [US2] Implement `AsyncHTTPClientTransport` (Linux, `#if canImport(FoundationNetworking)`) in `Sources/StoutCore/Transport/AsyncHTTPClientTransport.swift` (FR-022; depends on T009).
-- [ ] T021 [US2] Implement the `ExportPipeline` actor — **init takes `ingestionEndpoint: URL`** (a plain URL, decoupled from US1), bounded buffer, `nonisolated` non-blocking `submit`, async flush loop (size + interval triggers), gzip via T016, encode via T017, POST via injected `Transport` to `{ingestionEndpoint}/v2.1/track`, treat 200 as success — in `Sources/StoutCore/Pipeline/ExportPipeline.swift` (FR-011–013/023; research.md R5; addresses analysis I1; depends on T007, T008, T009, T016, T017; make T014/T015 pass).
+- [X] T016 [P] [US2] Implement the system-zlib `gzip(_:) throws -> [UInt8]` wrapper (`deflateInit2_` with `windowBits = MAX_WBITS + 16`, `Z_FINISH` loop, `deflateEnd`; import `zlib` on Apple / `CZlib` on Linux) in `Sources/StoutCore/Compression/Gzip.swift` (FR-010; research.md R1; make T013 pass).
+- [X] T017 [US2] Implement the batch encoder — single-line JSON per envelope + deterministic UTC ISO-8601 fractional `Z` timestamp formatting + `\n`-join — in `Sources/StoutCore/Envelope/Envelope.swift` (or an `EnvelopeEncoding.swift`) (FR-009; depends on T007; make T012 pass).
+- [X] T018 [US2] Implement `EnvelopeFactory` — **init takes `instrumentationKey: String` + `TelemetryTags`, NOT `ConnectionConfiguration`** (so US2 needs no US1 code) — stamping `ver`/`name`/`time`/`sampleRate`/`iKey`/`tags` around a caller `baseType`+`baseData` in `Sources/StoutCore/Envelope/EnvelopeFactory.swift` (FR-007; addresses analysis I1; depends on T007, T005).
+- [X] T019 [P] [US2] Implement `URLSessionTransport` (Apple, `#if !canImport(FoundationNetworking)`) in `Sources/StoutCore/Transport/URLSessionTransport.swift` (FR-022; depends on T009).
+- [X] T020 [P] [US2] Implement `AsyncHTTPClientTransport` (Linux, `#if canImport(FoundationNetworking)`) in `Sources/StoutCore/Transport/AsyncHTTPClientTransport.swift` (FR-022; depends on T009).
+- [X] T021 [US2] Implement the `ExportPipeline` actor — **init takes `ingestionEndpoint: URL`** (a plain URL, decoupled from US1), bounded buffer, `nonisolated` non-blocking `submit`, async flush loop (size + interval triggers), gzip via T016, encode via T017, POST via injected `Transport` to `{ingestionEndpoint}/v2.1/track`, treat 200 as success — in `Sources/StoutCore/Pipeline/ExportPipeline.swift` (FR-011–013/023; research.md R5; addresses analysis I1; depends on T007, T008, T009, T016, T017; make T014/T015 pass).
 
 **Checkpoint**: With US1 + US2 complete, the exporter core can carry a batch end-to-end — this is the MVP.
 
