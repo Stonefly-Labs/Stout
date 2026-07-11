@@ -150,11 +150,11 @@ Swift library (SwiftPM). Sources in `Sources/StoutCore/`, tests in `Tests/StoutC
 
 ### Tests for User Story 5
 
-- [ ] T029 [P] [US5] `ShutdownTests` in `Tests/StoutCoreTests/ShutdownTests.swift`: pending flushed ≤ 30s timeout, in-flight completes, client closed, no hang; **`shutdown()` invoked while a retry backoff is pending still completes within the timeout** (spec Edge Case; addresses analysis U1); 2nd `shutdown()` = no-op; post-shutdown submit dropped without crash/block; exactly ONE rate-limited internal-diagnostics warning with no payload (Acc #6; FR-015/016; SC-005).
+- [x] T029 [P] [US5] `ShutdownTests` in `Tests/StoutCoreTests/ShutdownTests.swift`: pending flushed ≤ 30s timeout, in-flight completes, client closed, no hang; **`shutdown()` invoked while a retry backoff is pending still completes within the timeout** (spec Edge Case; addresses analysis U1); 2nd `shutdown()` = no-op; post-shutdown submit dropped without crash/block; exactly ONE rate-limited internal-diagnostics warning with no payload (Acc #6; FR-015/016; SC-005).
 
 ### Implementation for User Story 5
 
-- [ ] T030 [US5] Add the lifecycle state machine (`running`/`draining`/`inert`) + idempotent `shutdown()` (stop accepting, best-effort flush ≤ `shutdownDrainTimeout`, await in-flight, close transport) + single rate-limited post-shutdown warning via `Diagnostics` in `Sources/StoutCore/Pipeline/ExportPipeline.swift` (FR-015/016; extends T021; make T029 pass).
+- [x] T030 [US5] Add the lifecycle state machine (`running`/`draining`/`inert`) + idempotent `shutdown()` (stop accepting, best-effort flush ≤ `shutdownDrainTimeout`, await in-flight, close transport) + single rate-limited post-shutdown warning via `Diagnostics` in `Sources/StoutCore/Pipeline/ExportPipeline.swift` (FR-015/016; extends T021; make T029 pass).
 
 **Checkpoint**: Lifecycle is safe at exit; no host hang, no data loss beyond the timeout.
 
@@ -168,12 +168,12 @@ Swift library (SwiftPM). Sources in `Sources/StoutCore/`, tests in `Tests/StoutC
 
 ### Tests for User Story 6
 
-- [ ] T031 [P] [US6] `ResourceTagsTests` in `Tests/StoutCoreTests/ResourceTagsTests.swift`: `ai.cloud.role` = `[ns]/name` when namespace present else `name`; `ai.cloud.roleInstance` = `service.instance.id` else host name; `ai.internal.sdkVersion` = `stout:<version>`; on-device `ai.device.*`/`ai.application.ver` when available; explicit override beats detection (Acc #10; FR-018–021).
+- [x] T031 [P] [US6] `ResourceTagsTests` (shipped as `Tests/StoutCoreTests/ResourceDetectorTests.swift`): `ai.cloud.role` = `[ns]/name` when namespace present else `name`; `ai.cloud.roleInstance` = `service.instance.id` else host name; `ai.internal.sdkVersion` = `stout:<version>`; on-device `ai.device.*`/`ai.application.ver` when available; explicit override beats detection (Acc #10; FR-018–021).
 
 ### Implementation for User Story 6
 
-- [ ] T032 [US6] Implement `ResourceDetector.makeTags` — role-name composition (bracketed namespace), roleInstance fallback, `stout:<version>` sdkVersion, Apple device/app tags, override precedence, computed once — in `Sources/StoutCore/Resource/ResourceDetector.swift` (FR-018–021; depends on T005; make T031 pass).
-- [ ] T033 [US6] Feed the computed resource tags into `EnvelopeFactory` so every envelope's `tags` is stamped (merged with per-item tags) in `Sources/StoutCore/Envelope/EnvelopeFactory.swift` (FR-021; depends on T018, T032).
+- [x] T032 [US6] Implement `ResourceDetector.makeTags` — role-name composition (bracketed namespace), roleInstance fallback, `stout:<version>` sdkVersion, Apple device/app tags, override precedence, computed once — in `Sources/StoutCore/Resource/ResourceDetector.swift` (FR-018–021; depends on T005; make T031 pass).
+- [x] T033 [US6] Feed the computed resource tags into `EnvelopeFactory` so every envelope's `tags` is stamped (merged with per-item tags) in `Sources/StoutCore/Envelope/EnvelopeFactory.swift` (FR-021; depends on T018, T032).
 
 **Checkpoint**: Every envelope carries correct role/instance/device attribution.
 
@@ -183,12 +183,12 @@ Swift library (SwiftPM). Sources in `Sources/StoutCore/`, tests in `Tests/StoutC
 
 **Purpose**: Constitution gates that span all stories.
 
-- [ ] T034 [P] Add doc comments to every public API to match `contracts/public-api.md` (Constitution IV/V; FR-033).
-- [ ] T035 Add a secret-safety test sweep in `Tests/StoutCoreTests/SecretRedactionTests.swift` asserting no connection string / iKey / token appears in any error, diagnostic, or debug output across all paths (SC-002; FR-028) — pairs with a `secret-safety-sentinel` review.
-- [ ] T036 Run a Swift 6 strict-concurrency audit: build `StoutCore` on an Apple platform AND Linux with zero data-race warnings, no `@unchecked Sendable` without justification (Acc #12; FR-030; SC-007) — pairs with a `swift6-concurrency-auditor` review.
-- [ ] T037 [P] Run `swift format lint --strict --recursive Sources Tests` and fix violations (2-space indent).
-- [ ] T038 Execute the `quickstart.md` validation scenarios (1–13) on BOTH an Apple platform (iOS Simulator / macOS) and Linux; record results.
-- [ ] T039 [P] Update `README.md` / `Sources/StoutCore` summary doc to reflect the shipped core surface.
+- [x] T034 [P] Add doc comments to every public API to match `contracts/public-api.md` (Constitution IV/V; FR-033).
+- [x] T035 Add a secret-safety test sweep in `Tests/StoutCoreTests/SecretRedactionTests.swift` asserting no connection string / iKey / token appears in any error, diagnostic, or debug output across all paths (SC-002; FR-028) — pairs with a `secret-safety-sentinel` review.
+- [~] T036 Run a Swift 6 strict-concurrency audit: build `StoutCore` on an Apple platform AND Linux with zero data-race warnings, no `@unchecked Sendable` without justification (Acc #12; FR-030; SC-007) — pairs with a `swift6-concurrency-auditor` review. **Apple leg done** (builds clean under strict concurrency complete on macOS; sole `@unchecked Sendable` is the test-only `RecordingDiagnostics`, justified inline). **Linux leg deferred to the pending CI Linux leg (D6).**
+- [x] T037 [P] Run `swift format lint --strict --recursive Sources Tests` and fix violations (2-space indent).
+- [~] T038 Execute the `quickstart.md` validation scenarios (1–13) on BOTH an Apple platform (iOS Simulator / macOS) and Linux; record results. **macOS leg green** (`swift build` + full `swift test` pass). **iOS-Simulator + Linux legs deferred to the pending CI legs (D6).**
+- [x] T039 [P] Update `README.md` / `Sources/StoutCore` summary doc to reflect the shipped core surface.
 
 ---
 
