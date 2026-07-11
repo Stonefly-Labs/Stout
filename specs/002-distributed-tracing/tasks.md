@@ -104,19 +104,19 @@ HTTP mapper. Nothing here is story-specific.
 
 ### Tests for User Story 2 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T028 [P] [US2] `Tests/StoutTracingTests/DependencyTranslationTests.swift` — `.client`/`.producer`/`.internal`/unspecified ⇒ exactly one `RemoteDependencyData`; `.internal`⇒`type=InProc`; correlation id/parentId asserted; unmapped attributes **and span links** → `properties` (US2 Acc 1 & 4, FR-022, SC-001).
-- [ ] T029 [P] [US2] `Tests/StoutTracingTests/DBMappingTests.swift` — DB `.client`: `type ← db.system`|`SQL`, `target ← db.namespace`/server, `data ← db.query.text`/`db.statement`; current+legacy keys (US2 Acc 3, FR-013–015).
-- [ ] T030 [P] [US2] `Tests/StoutTracingTests/RPCMappingTests.swift` — gRPC/RPC `type`/`target`/`data`, `resultCode ← rpc.grpc.status_code` (FR-013–016).
-- [ ] T031 [P] [US2] `Tests/StoutTracingTests/MessagingMappingTests.swift` — producer messaging `type`/`target`/`data`; consumer messaging `RequestData.source` population (FR-008), else empty.
-- [ ] T032 [P] [US2] `SuccessPredicateTests` (Dependency side) — dependency `success = (status != error)` only; a 4xx/5xx dependency with unset status is a **success** (INV-3b, FR-012).
+- [X] T028 [P] [US2] `Tests/StoutTracingTests/DependencyTranslationTests.swift` — `.client`/`.producer`/`.internal`/unspecified ⇒ exactly one `RemoteDependencyData`; `.internal`⇒`type=InProc`; correlation id/parentId asserted; unmapped attributes **and span links** → `properties` (US2 Acc 1 & 4, FR-022, SC-001).
+- [X] T029 [P] [US2] `Tests/StoutTracingTests/DBMappingTests.swift` — DB `.client`: `type ← db.system`|`SQL`, `target ← db.namespace`/server, `data ← db.query.text`/`db.statement`; current+legacy keys (US2 Acc 3, FR-013–015).
+- [X] T030 [P] [US2] `Tests/StoutTracingTests/RPCMappingTests.swift` — gRPC/RPC `type`/`target`/`data`, `resultCode ← rpc.grpc.status_code` (FR-013–016).
+- [X] T031 [P] [US2] `Tests/StoutTracingTests/MessagingMappingTests.swift` — producer messaging `type`/`target`/`data`; consumer messaging `RequestData.source` population (FR-008), else empty.
+- [X] T032 [P] [US2] `SuccessPredicateTests` (Dependency side) — dependency `success = (status != error)` only; a 4xx/5xx dependency with unset status is a **success** (INV-3b, FR-012).
 
 ### Implementation for User Story 2
 
-- [ ] T033 [US2] Dependency population in `SpanTranslator` (or `Sources/StoutTracing/Translation/DependencyMapping.swift`): fill `RemoteDependencyData` via `HTTPMapping` (client side) + `SuccessPredicate` (dependency) + `BreezeDuration`; `type`=`HTTP`/`InProc`/protocol; unmapped attrs+links → `properties` (FR-012–015).
-- [ ] T034 [P] [US2] `Sources/StoutTracing/Translation/DBMapping.swift` — DB `type/target/data` from `db.*` keys (current+legacy), mssql→`SQL` (FR-013–015).
-- [ ] T035 [P] [US2] `Sources/StoutTracing/Translation/RPCMapping.swift` — gRPC/RPC `type` (e.g. `GRPC`, D-04)/`target`/`data`/`resultCode` from `rpc.*` (FR-013–016).
-- [ ] T036 [P] [US2] `Sources/StoutTracing/Translation/MessagingMapping.swift` — producer/consumer `type/target/data` from `messaging.*`/`peer.service`, and `RequestData.source` for consumer (FR-008/013–015).
-- [ ] T037 [US2] Wire DB/RPC/messaging mappers into `SpanTranslator`'s dependency (and consumer-request `source`) paths so protocol selection is deterministic (FR-016).
+- [X] T033 [US2] Dependency population in `SpanTranslator` (or `Sources/StoutTracing/Translation/DependencyMapping.swift`): fill `RemoteDependencyData` via `HTTPMapping` (client side) + `SuccessPredicate` (dependency) + `BreezeDuration`; `type`=`HTTP`/`InProc`/protocol; unmapped attrs+links → `properties` (FR-012–015).
+- [X] T034 [P] [US2] `Sources/StoutTracing/Translation/DBMapping.swift` — DB `type/target/data` from `db.*` keys (current+legacy), mssql→`SQL` (FR-013–015).
+- [X] T035 [P] [US2] `Sources/StoutTracing/Translation/RPCMapping.swift` — gRPC/RPC `type` (e.g. `GRPC`, D-04)/`target`/`data`/`resultCode` from `rpc.*` (FR-013–016).
+- [X] T036 [P] [US2] `Sources/StoutTracing/Translation/MessagingMapping.swift` — producer/consumer `type/target/data` from `messaging.*`/`peer.service`, and `RequestData.source` for consumer (FR-008/013–015).
+- [X] T037 [US2] Wire DB/RPC/messaging mappers into `SpanTranslator`'s dependency (and consumer-request `source`) paths so protocol selection is deterministic (FR-016).
 
 **Checkpoint**: Request + linked Dependency render as one transaction (US1 + US2 both pass independently).
 

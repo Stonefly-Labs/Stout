@@ -50,6 +50,7 @@ enum SemanticConventions {
   static let messagingSystem = "messaging.system"
   static let messagingDestinationName = "messaging.destination.name"
   static let messagingDestinationLegacy = "messaging.destination"
+  static let networkProtocolName = "network.protocol.name"
 
   static let peerService = "peer.service"
 

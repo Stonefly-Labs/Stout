@@ -20,11 +20,13 @@ enum RequestMapping {
   /// - `url` ← reconstructed HTTP URL when derivable.
   /// - `properties` ← unconsumed attributes + links.
   ///
-  /// `source` is left absent here; the messaging-consumer origin is populated in
-  /// User Story 2 (FR-008).
+  /// `source` is populated for messaging-consumer requests from the messaging origin
+  /// (`host[/destination]`), else absent (FR-008, D-05).
   static func requestData(for span: SpanData) -> RequestData {
     let http = HTTPMapping.derive(from: span.attributes)
-    let consumed = Set(http?.consumedKeys ?? [])
+    let messaging = MessagingMapping.derive(from: span.attributes)
+    var consumed = Set(http?.consumedKeys ?? [])
+    consumed.formUnion(messaging?.consumedKeys ?? [])
     let properties = SpanTranslator.properties(from: span, consuming: consumed)
 
     return RequestData(
@@ -35,6 +37,7 @@ enum RequestMapping {
       success: SuccessPredicate.requestSuccess(
         status: span.status, httpStatusCode: http?.statusCode),
       url: http?.url,
+      source: messaging?.source,
       properties: properties)
   }
 }

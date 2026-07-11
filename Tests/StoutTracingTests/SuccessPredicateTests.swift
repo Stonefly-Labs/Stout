@@ -49,4 +49,51 @@ final class SuccessPredicateTests: XCTestCase {
     XCTAssertEqual(SuccessPredicate.codeString(nil), "0")
     XCTAssertEqual(SuccessPredicate.codeString("404"), "404")
   }
+
+  // MARK: - Dependency side (US2)
+
+  func testDependencyErrorStatusFails() {
+    XCTAssertFalse(SuccessPredicate.dependencySuccess(status: .error(description: "boom")))
+  }
+
+  func testDependencyUnsetStatusIsSuccess() {
+    // No code threshold on the dependency side — unset status is a success.
+    XCTAssertTrue(SuccessPredicate.dependencySuccess(status: .unset))
+  }
+
+  func testDependencyOkStatusIsSuccess() {
+    XCTAssertTrue(SuccessPredicate.dependencySuccess(status: .ok))
+  }
+
+  func testDependency4xx5xxWithUnsetStatusIsStillSuccess() {
+    // A dependency HTTP 4xx/5xx with an unset span status is a **success** — there
+    // is no HTTP/gRPC code threshold for dependencies (INV-3b, FR-012).
+    let span = SpanDataBuilder(
+      kind: .client,
+      status: .unset,
+      attributes: [
+        SemanticConventions.httpRequestMethod: .string("GET"),
+        SemanticConventions.httpResponseStatusCode: .int(503),
+        SemanticConventions.urlFull: .string("https://api.example.com/x"),
+      ]
+    ).build()
+
+    let data = DependencyMapping.remoteDependencyData(for: span)
+    XCTAssertEqual(data.resultCode, "503")
+    XCTAssertTrue(data.success, "a dependency 5xx with unset status must be a success")
+  }
+
+  func testDependencyErrorStatusFailsEndToEnd() {
+    let span = SpanDataBuilder(
+      kind: .client,
+      status: .error(description: "timeout"),
+      attributes: [
+        SemanticConventions.httpRequestMethod: .string("GET"),
+        SemanticConventions.httpResponseStatusCode: .int(200),
+        SemanticConventions.urlFull: .string("https://api.example.com/x"),
+      ]
+    ).build()
+
+    XCTAssertFalse(DependencyMapping.remoteDependencyData(for: span).success)
+  }
 }

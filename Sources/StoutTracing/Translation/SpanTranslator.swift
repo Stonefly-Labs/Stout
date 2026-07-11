@@ -18,8 +18,8 @@ import StoutCore
 /// 2. Build correlation `itemTags` (`CorrelationMapping`) — `ai.operation.id` from
 ///    the trace id, `ai.operation.parentId` from the parent span id (absent when
 ///    root), plus `ai.operation.name` for Request items.
-/// 3. Populate protocol fields via the matching per-protocol mapper (HTTP here;
-///    DB/RPC/messaging arrive with US2), consuming recognized attribute keys.
+/// 3. Populate protocol fields via the matching per-protocol mapper (HTTP for
+///    requests; DB/RPC/messaging/HTTP for dependencies), consuming recognized keys.
 /// 4. Carry every unconsumed attribute **and** span link into `properties`.
 /// 5. Compute `success`/`responseCode`/`resultCode` via `SuccessPredicate`.
 /// 6. Emit exactly one Request/Dependency item (event-derived Exception/Message
@@ -41,16 +41,14 @@ enum SpanTranslator {
   /// Translate one finished span into its Breeze envelopes.
   ///
   /// `.server`/`.consumer` spans become exactly one `RequestData`; all other kinds
-  /// become a `RemoteDependencyData` (wired in US2). Exactly one Request/Dependency
-  /// item per span (INV-1).
+  /// become a `RemoteDependencyData`. Exactly one Request/Dependency item per span
+  /// (INV-1).
   static func translate(_ span: SpanData, using factory: EnvelopeFactory) -> [Envelope] {
     switch SpanKindMapping.itemType(for: span.kind) {
     case .request:
       return [requestEnvelope(for: span, using: factory)]
     case .dependency:
-      // The dependency path is wired in User Story 2; until then a dependency span
-      // produces no item rather than a malformed one.
-      return []
+      return [dependencyEnvelope(for: span, using: factory)]
     }
   }
 
@@ -66,6 +64,23 @@ enum SpanTranslator {
     tags[PartATagKeys.operationName] = data.name
     return factory.makeEnvelope(
       name: RequestData.telemetryName,
+      payload: data,
+      time: span.startTime,
+      sampleRate: defaultSampleRate,
+      itemTags: tags)
+  }
+
+  // MARK: - Dependency path (User Story 2)
+
+  private static func dependencyEnvelope(
+    for span: SpanData, using factory: EnvelopeFactory
+  ) -> Envelope {
+    let data = DependencyMapping.remoteDependencyData(for: span)
+    // Dependencies carry `ai.operation.id`/`ai.operation.parentId` but not
+    // `ai.operation.name` (that names the owning request — data-model §2).
+    let tags = CorrelationMapping.spanTags(traceId: span.traceId, parentSpanId: span.parentSpanId)
+    return factory.makeEnvelope(
+      name: RemoteDependencyData.telemetryName,
       payload: data,
       time: span.startTime,
       sampleRate: defaultSampleRate,
