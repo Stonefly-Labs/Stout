@@ -45,21 +45,22 @@ HTTP mapper. Nothing here is story-specific.
 
 **⚠️ CRITICAL**: No user-story translation work can begin until this phase is complete.
 
-- [ ] T005 [P] Add `operationId` (`ai.operation.id`), `operationParentId` (`ai.operation.parentId`), and `operationName` (`ai.operation.name`) constants to `Sources/StoutCore/Envelope/PartATagKeys.swift` (data-model §2; the only StoutCore edit this feature makes).
-- [ ] T006 [P] `Sources/StoutTracing/Model/RequestData.swift` — `BaseData` conformer, `baseType = "RequestData"`, encodes `ver:2` first; fields `id/name/duration/responseCode/success/url?/source?/properties` (data-model §1a).
-- [ ] T007 [P] `Sources/StoutTracing/Model/RemoteDependencyData.swift` — `BaseData`, `baseType = "RemoteDependencyData"`, `ver:2`; fields `id/name/duration/resultCode/success/type/target?/data?/properties` (data-model §1b).
-- [ ] T008 [P] `Sources/StoutTracing/Model/ExceptionData.swift` — `BaseData`, `baseType = "ExceptionData"`, `ver:2`; `exceptions[].{typeName,message,hasFullStack,stack?}` + `properties` (data-model §1c).
-- [ ] T009 [P] `Sources/StoutTracing/Model/MessageData.swift` — `BaseData`, `baseType = "MessageData"`, `ver:2`; `message` + `properties` (data-model §1d).
-- [ ] T010 [P] `Sources/StoutTracing/Translation/BreezeDuration.swift` — `(endTime − startTime) → "d.hh:mm:ss.fffffff"`; zero/negative clamps to `0`, never crashes (mapping contract Determinism notes).
-- [ ] T011 [P] `Sources/StoutTracing/Translation/AttributeStringifier.swift` — single documented `AttributeValue → String` rule for `.string/.bool/.int/.double/.array/.set` (+ deprecated `*Array`), used for `properties` and stringified fields (data-model §0).
-- [ ] T012 [P] `Sources/StoutTracing/Translation/SemanticConventions.swift` — the current+legacy key table (data-model §5) with a current-wins lookup helper; deterministic, not attribute-order-dependent (INV-3, research.md D-07).
-- [ ] T013 [P] `Sources/StoutTracing/Translation/SpanKindMapping.swift` — `SpanKind → {Request | Dependency}` incl. unspecified→Dependency default (data-model §3, FR-006).
-- [ ] T014 [P] `Sources/StoutTracing/Translation/CorrelationMapping.swift` — the shared rule (FR-007/FR-024) operating on `TraceId`/`SpanId`/`SpanId?` (NOT `SpanData`, so spec 03 reuses it verbatim): `operationId ← traceId` (32-hex), item `id ← spanId` (16-hex), `parentId ← parentSpanId` absent-when-root; byte-for-byte lowercase hex.
-- [ ] T015 [P] `Sources/StoutTracing/Translation/SuccessPredicate.swift` — actual .NET `TraceHelper` logic (data-model §4, research.md D-03): error status ⇒ `success=false` always; Request unset-status HTTP ⇒ `code != 0 && code < 400` (4xx **and** 5xx fail); Dependency ⇒ `status != error` only (no code threshold); plus `responseCode`/`resultCode` derivation with `"0"` default.
-- [ ] T016 [P] `Sources/StoutTracing/Translation/HTTPMapping.swift` — shared HTTP derivation (url/target host[:port]/status/route-name) from current+legacy HTTP keys; consumed by US1 (Request) and US2 (Dependency).
-- [ ] T017 [P] `Tests/StoutTracingTests/BreezeDurationTests.swift` — duration formatting incl. zero/negative clamp and sub-second precision.
-- [ ] T018 [P] `Tests/StoutTracingTests/SemanticConventionPrecedenceTests.swift` — current-over-legacy precedence, order-independence (INV-3).
-- [ ] T019 [P] `Tests/StoutTracingTests/SpanKindMappingTests.swift` — full kind→type table incl. unspecified→Dependency (SC-001, FR-006).
+- [X] T005 [P] Add `operationId` (`ai.operation.id`), `operationParentId` (`ai.operation.parentId`), and `operationName` (`ai.operation.name`) constants to `Sources/StoutCore/Envelope/PartATagKeys.swift` (data-model §2; the only StoutCore edit this feature makes).
+- [X] T006 [P] `Sources/StoutTracing/Model/RequestData.swift` — `BaseData` conformer, `baseType = "RequestData"`, encodes `ver:2` first; fields `id/name/duration/responseCode/success/url?/source?/properties` (data-model §1a).
+- [X] T007 [P] `Sources/StoutTracing/Model/RemoteDependencyData.swift` — `BaseData`, `baseType = "RemoteDependencyData"`, `ver:2`; fields `id/name/duration/resultCode/success/type/target?/data?/properties` (data-model §1b).
+- [X] T008 [P] `Sources/StoutTracing/Model/ExceptionData.swift` — `BaseData`, `baseType = "ExceptionData"`, `ver:2`; `exceptions[].{typeName,message,hasFullStack,stack?}` + `properties` (data-model §1c).
+- [X] T009 [P] `Sources/StoutTracing/Model/MessageData.swift` — `BaseData`, `baseType = "MessageData"`, `ver:2`; `message` + `properties` (data-model §1d).
+- [X] T010 [P] `Sources/StoutTracing/Translation/BreezeDuration.swift` — `(endTime − startTime) → "d.hh:mm:ss.fffffff"`; zero/negative clamps to `0`, never crashes (mapping contract Determinism notes).
+- [X] T011 [P] `Sources/StoutTracing/Translation/AttributeStringifier.swift` — single documented `AttributeValue → String` rule for `.string/.bool/.int/.double/.array/.set` (+ deprecated `*Array`), used for `properties` and stringified fields (data-model §0).
+- [X] T012 [P] `Sources/StoutTracing/Translation/SemanticConventions.swift` — the current+legacy key table (data-model §5) with a current-wins lookup helper; deterministic, not attribute-order-dependent (INV-3, research.md D-07).
+- [X] T013 [P] `Sources/StoutTracing/Translation/SpanKindMapping.swift` — `SpanKind → {Request | Dependency}` incl. unspecified→Dependency default (data-model §3, FR-006).
+- [X] T014 [P] `Sources/StoutTracing/Translation/CorrelationMapping.swift` — the shared rule (FR-007/FR-024) operating on `TraceId`/`SpanId`/`SpanId?` (NOT `SpanData`, so spec 03 reuses it verbatim): `operationId ← traceId` (32-hex), item `id ← spanId` (16-hex), `parentId ← parentSpanId` absent-when-root; byte-for-byte lowercase hex.
+- [X] T015 [P] `Sources/StoutTracing/Translation/SuccessPredicate.swift` — actual .NET `TraceHelper` logic (data-model §4, research.md D-03): error status ⇒ `success=false` always; Request unset-status HTTP ⇒ `code != 0 && code < 400` (4xx **and** 5xx fail); Dependency ⇒ `status != error` only (no code threshold); plus `responseCode`/`resultCode` derivation with `"0"` default.
+- [X] T016 [P] `Sources/StoutTracing/Translation/HTTPMapping.swift` — shared HTTP derivation (url/target host[:port]/status/route-name) from current+legacy HTTP keys; consumed by US1 (Request) and US2 (Dependency).
+- [X] T017 [P] `Tests/StoutTracingTests/BreezeDurationTests.swift` — duration formatting incl. zero/negative clamp and sub-second precision.
+- [X] T018 [P] `Tests/StoutTracingTests/SemanticConventionPrecedenceTests.swift` — current-over-legacy precedence, order-independence (INV-3).
+- [X] T019 [P] `Tests/StoutTracingTests/SpanKindMappingTests.swift` — full kind→type table incl. unspecified→Dependency (SC-001, FR-006).
+
 
 **Checkpoint**: Building blocks compile clean under Swift 6 strict concurrency; foundational unit suites pass. User stories can now begin.
 
@@ -76,17 +77,17 @@ HTTP mapper. Nothing here is story-specific.
 
 ### Tests for User Story 1 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T020 [P] [US1] `Tests/StoutTracingTests/RequestTranslationTests.swift` — `.server` and `.consumer` span ⇒ exactly one `RequestData`; asserts id/name/duration/responseCode/url; unmapped attributes **and span links** → `properties` (no first-class Breeze span-link field) (US1 Acc 1–4, FR-022, SC-001).
-- [ ] T021 [P] [US1] `Tests/StoutTracingTests/HTTPMappingTests.swift` (Request side) — url reconstruction from `url.full`/`http.url` and scheme/host/target; route/method-derived name; current+legacy keys.
-- [ ] T022 [P] [US1] `Tests/StoutTracingTests/SuccessPredicateTests.swift` (Request side) — server HTTP ranges: `code<400 && code!=0` success, 4xx & 5xx & 0 fail; error status forces `success=false` (INV-3b).
-- [ ] T023 [P] [US1] `Tests/StoutTracingTests/ExporterSubmitTests.swift` — `export(...)` returns promptly with `.success`, submits via `pipeline.submit`, does not block (FR-004).
+- [X] T020 [P] [US1] `Tests/StoutTracingTests/RequestTranslationTests.swift` — `.server` and `.consumer` span ⇒ exactly one `RequestData`; asserts id/name/duration/responseCode/url; unmapped attributes **and span links** → `properties` (no first-class Breeze span-link field) (US1 Acc 1–4, FR-022, SC-001).
+- [X] T021 [P] [US1] `Tests/StoutTracingTests/HTTPMappingTests.swift` (Request side) — url reconstruction from `url.full`/`http.url` and scheme/host/target; route/method-derived name; current+legacy keys.
+- [X] T022 [P] [US1] `Tests/StoutTracingTests/SuccessPredicateTests.swift` (Request side) — server HTTP ranges: `code<400 && code!=0` success, 4xx & 5xx & 0 fail; error status forces `success=false` (INV-3b).
+- [X] T023 [P] [US1] `Tests/StoutTracingTests/ExporterSubmitTests.swift` — `export(...)` returns promptly with `.success`, submits via `pipeline.submit`, does not block (FR-004).
 
 ### Implementation for User Story 1
 
-- [ ] T024 [US1] `Sources/StoutTracing/Translation/SpanTranslator.swift` — pure `translate(_ span:) -> [Envelope]` orchestration (mapping contract steps 1–7): resolve kind → build correlation `itemTags` → protocol fields → carry unconsumed attributes+links to `properties` → success/code → stamp `Envelope` (`time = startTime`, `sampleRate = 100`). Request path wired end-to-end; never throws into host (FR-026).
-- [ ] T025 [US1] Request population in `SpanTranslator` (or `Sources/StoutTracing/Translation/RequestMapping.swift`): fill `RequestData` via `HTTPMapping` + `SuccessPredicate` (server) + `BreezeDuration`; `id ← spanId`; unmapped attrs+links → `properties` (FR-010/011, US1 Acc 2 & 4).
-- [ ] T026 [US1] `Sources/StoutTracing/AzureMonitorTraceExporter.swift` — `public final class ... : SpanExporter`, `init(pipeline:envelopeFactory:)`; implement **all** required members (sync + async `export`/`flush`/`shutdown`, no `assertionFailure` defaults) per contracts/span-exporter.md; `export` translates each span and `submit`s each envelope, returns `.success`/`.failure`; `Sendable` via injected pipeline actor + immutable factory (FR-001/003/005/027).
-- [ ] T027 [US1] `Sources/StoutTracing/TraceExporterRegistration.swift` — thin helper building the exporter from a spec-01 assembled `ExportPipeline` + `EnvelopeFactory`; resource tags are detected **once at registration** via `ResourceDetector.detect(resource:)` on the provider's `Resource` and baked into the injected `EnvelopeFactory` (NOT re-detected per span), FR-009; documents that provider/`BatchSpanProcessor` bootstrap is spec 07, not here.
+- [X] T024 [US1] `Sources/StoutTracing/Translation/SpanTranslator.swift` — pure `translate(_ span:) -> [Envelope]` orchestration (mapping contract steps 1–7): resolve kind → build correlation `itemTags` → protocol fields → carry unconsumed attributes+links to `properties` → success/code → stamp `Envelope` (`time = startTime`, `sampleRate = 100`). Request path wired end-to-end; never throws into host (FR-026).
+- [X] T025 [US1] Request population in `SpanTranslator` (or `Sources/StoutTracing/Translation/RequestMapping.swift`): fill `RequestData` via `HTTPMapping` + `SuccessPredicate` (server) + `BreezeDuration`; `id ← spanId`; unmapped attrs+links → `properties` (FR-010/011, US1 Acc 2 & 4).
+- [X] T026 [US1] `Sources/StoutTracing/AzureMonitorTraceExporter.swift` — `public final class ... : SpanExporter`, `init(pipeline:envelopeFactory:)`; implement **all** required members (sync + async `export`/`flush`/`shutdown`, no `assertionFailure` defaults) per contracts/span-exporter.md; `export` translates each span and `submit`s each envelope, returns `.success`/`.failure`; `Sendable` via injected pipeline actor + immutable factory (FR-001/003/005/027).
+- [X] T027 [US1] `Sources/StoutTracing/TraceExporterRegistration.swift` — thin helper building the exporter from a spec-01 assembled `ExportPipeline` + `EnvelopeFactory`; resource tags are detected **once at registration** via `ResourceDetector.detect(resource:)` on the provider's `Resource` and baked into the injected `EnvelopeFactory` (NOT re-detected per span), FR-009; documents that provider/`BatchSpanProcessor` bootstrap is spec 07, not here.
 
 **Checkpoint**: A `.server` span becomes one correlated `RequestData` on the pipeline — MVP trace path works. STOP and validate independently.
 
@@ -104,19 +105,19 @@ HTTP mapper. Nothing here is story-specific.
 
 ### Tests for User Story 2 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T028 [P] [US2] `Tests/StoutTracingTests/DependencyTranslationTests.swift` — `.client`/`.producer`/`.internal`/unspecified ⇒ exactly one `RemoteDependencyData`; `.internal`⇒`type=InProc`; correlation id/parentId asserted; unmapped attributes **and span links** → `properties` (US2 Acc 1 & 4, FR-022, SC-001).
-- [ ] T029 [P] [US2] `Tests/StoutTracingTests/DBMappingTests.swift` — DB `.client`: `type ← db.system`|`SQL`, `target ← db.namespace`/server, `data ← db.query.text`/`db.statement`; current+legacy keys (US2 Acc 3, FR-013–015).
-- [ ] T030 [P] [US2] `Tests/StoutTracingTests/RPCMappingTests.swift` — gRPC/RPC `type`/`target`/`data`, `resultCode ← rpc.grpc.status_code` (FR-013–016).
-- [ ] T031 [P] [US2] `Tests/StoutTracingTests/MessagingMappingTests.swift` — producer messaging `type`/`target`/`data`; consumer messaging `RequestData.source` population (FR-008), else empty.
-- [ ] T032 [P] [US2] `SuccessPredicateTests` (Dependency side) — dependency `success = (status != error)` only; a 4xx/5xx dependency with unset status is a **success** (INV-3b, FR-012).
+- [X] T028 [P] [US2] `Tests/StoutTracingTests/DependencyTranslationTests.swift` — `.client`/`.producer`/`.internal`/unspecified ⇒ exactly one `RemoteDependencyData`; `.internal`⇒`type=InProc`; correlation id/parentId asserted; unmapped attributes **and span links** → `properties` (US2 Acc 1 & 4, FR-022, SC-001).
+- [X] T029 [P] [US2] `Tests/StoutTracingTests/DBMappingTests.swift` — DB `.client`: `type ← db.system`|`SQL`, `target ← db.namespace`/server, `data ← db.query.text`/`db.statement`; current+legacy keys (US2 Acc 3, FR-013–015).
+- [X] T030 [P] [US2] `Tests/StoutTracingTests/RPCMappingTests.swift` — gRPC/RPC `type`/`target`/`data`, `resultCode ← rpc.grpc.status_code` (FR-013–016).
+- [X] T031 [P] [US2] `Tests/StoutTracingTests/MessagingMappingTests.swift` — producer messaging `type`/`target`/`data`; consumer messaging `RequestData.source` population (FR-008), else empty.
+- [X] T032 [P] [US2] `SuccessPredicateTests` (Dependency side) — dependency `success = (status != error)` only; a 4xx/5xx dependency with unset status is a **success** (INV-3b, FR-012).
 
 ### Implementation for User Story 2
 
-- [ ] T033 [US2] Dependency population in `SpanTranslator` (or `Sources/StoutTracing/Translation/DependencyMapping.swift`): fill `RemoteDependencyData` via `HTTPMapping` (client side) + `SuccessPredicate` (dependency) + `BreezeDuration`; `type`=`HTTP`/`InProc`/protocol; unmapped attrs+links → `properties` (FR-012–015).
-- [ ] T034 [P] [US2] `Sources/StoutTracing/Translation/DBMapping.swift` — DB `type/target/data` from `db.*` keys (current+legacy), mssql→`SQL` (FR-013–015).
-- [ ] T035 [P] [US2] `Sources/StoutTracing/Translation/RPCMapping.swift` — gRPC/RPC `type` (e.g. `GRPC`, D-04)/`target`/`data`/`resultCode` from `rpc.*` (FR-013–016).
-- [ ] T036 [P] [US2] `Sources/StoutTracing/Translation/MessagingMapping.swift` — producer/consumer `type/target/data` from `messaging.*`/`peer.service`, and `RequestData.source` for consumer (FR-008/013–015).
-- [ ] T037 [US2] Wire DB/RPC/messaging mappers into `SpanTranslator`'s dependency (and consumer-request `source`) paths so protocol selection is deterministic (FR-016).
+- [X] T033 [US2] Dependency population in `SpanTranslator` (or `Sources/StoutTracing/Translation/DependencyMapping.swift`): fill `RemoteDependencyData` via `HTTPMapping` (client side) + `SuccessPredicate` (dependency) + `BreezeDuration`; `type`=`HTTP`/`InProc`/protocol; unmapped attrs+links → `properties` (FR-012–015).
+- [X] T034 [P] [US2] `Sources/StoutTracing/Translation/DBMapping.swift` — DB `type/target/data` from `db.*` keys (current+legacy), mssql→`SQL` (FR-013–015).
+- [X] T035 [P] [US2] `Sources/StoutTracing/Translation/RPCMapping.swift` — gRPC/RPC `type` (e.g. `GRPC`, D-04)/`target`/`data`/`resultCode` from `rpc.*` (FR-013–016).
+- [X] T036 [P] [US2] `Sources/StoutTracing/Translation/MessagingMapping.swift` — producer/consumer `type/target/data` from `messaging.*`/`peer.service`, and `RequestData.source` for consumer (FR-008/013–015).
+- [X] T037 [US2] Wire DB/RPC/messaging mappers into `SpanTranslator`'s dependency (and consumer-request `source`) paths so protocol selection is deterministic (FR-016).
 
 **Checkpoint**: Request + linked Dependency render as one transaction (US1 + US2 both pass independently).
 
