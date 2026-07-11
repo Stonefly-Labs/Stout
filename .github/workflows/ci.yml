@@ -37,7 +37,9 @@ jobs:
   linux:
     name: Build & Test (Linux)
     runs-on: ubuntu-latest
-    container: swift:6.0
+    # swift:6.2+ required — transitive deps (async-http-client, swift-log) now
+    # declare swift-tools 6.2; the older 6.0 image fails to resolve them.
+    container: swift:6.2
     steps:
       - uses: actions/checkout@v4
       # zlib headers for the CZlib systemLibrary target (pkgConfig: "zlib").
