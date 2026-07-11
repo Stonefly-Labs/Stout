@@ -81,7 +81,10 @@ let package = Package(
       name: "StoutTracing",
       dependencies: [
         "StoutCore",
+        // SpanExporter / SpanData / SpanData.Event / SpanData.Link / Resource.
         .product(name: "OpenTelemetrySdk", package: "opentelemetry-swift-core"),
+        // SpanKind / Status / TraceId / SpanId / AttributeValue (translation inputs).
+        .product(name: "OpenTelemetryApi", package: "opentelemetry-swift-core"),
       ]
     ),
     .target(
@@ -125,7 +128,17 @@ let package = Package(
     ),
     // MARK: - Tests
     .testTarget(name: "StoutCoreTests", dependencies: ["StoutCore"]),
-    .testTarget(name: "StoutTracingTests", dependencies: ["StoutTracing"]),
+    .testTarget(
+      name: "StoutTracingTests",
+      dependencies: [
+        "StoutTracing",
+        // The test harness hand-builds `SpanData` (via `@testable import`) and
+        // uses the OTel id/attribute types directly — depend on both products so
+        // the imports resolve without relying on transitive re-export.
+        .product(name: "OpenTelemetrySdk", package: "opentelemetry-swift-core"),
+        .product(name: "OpenTelemetryApi", package: "opentelemetry-swift-core"),
+      ]
+    ),
     .testTarget(name: "StoutLoggingTests", dependencies: ["StoutLogging"]),
     .testTarget(name: "StoutMetricsTests", dependencies: ["StoutMetrics"]),
     .testTarget(name: "StoutLiveMetricsTests", dependencies: ["StoutLiveMetrics"]),
