@@ -47,7 +47,8 @@ actor CapturingTransport: Transport {
   /// Every envelope captured across all requests, decompressed and parsed. Order
   /// is submission order (the pipeline preserves batch order).
   func capturedEnvelopes() -> [CapturedEnvelope] {
-    requests.flatMap { request -> [CapturedEnvelope] in
+    let decoder = JSONDecoder()
+    return requests.flatMap { request -> [CapturedEnvelope] in
       guard
         let inflated = try? gunzip([UInt8](request.body)),
         let text = String(bytes: inflated, encoding: .utf8)
@@ -58,8 +59,7 @@ actor CapturingTransport: Transport {
         .compactMap { line in
           guard
             let data = line.data(using: .utf8),
-            let object = try? JSONSerialization.jsonObject(with: data),
-            let value = JSONValue(object)
+            let value = try? decoder.decode(JSONValue.self, from: data)
           else { return nil }
           return CapturedEnvelope(raw: value)
         }
@@ -113,10 +113,13 @@ struct CapturedEnvelope: Sendable {
   func tag(_ key: String) -> String? { tags?[key]?.stringValue }
 }
 
-/// A minimal, `Sendable`, `Equatable` JSON tree for test assertions. Built from the
-/// `Any` graph `JSONSerialization` produces, then that `Any` is discarded so nothing
-/// non-`Sendable` escapes.
-enum JSONValue: Sendable, Equatable {
+/// A minimal, `Sendable`, `Equatable` JSON tree for test assertions.
+///
+/// Decoded with `JSONDecoder` (not `JSONSerialization`) so Bool/Double/String are
+/// distinguished natively and portably — `JSONSerialization`'s `NSNumber` bridging
+/// needs CoreFoundation's `kCFBoolean*`, which does not exist in
+/// swift-corelibs-foundation on Linux.
+enum JSONValue: Sendable, Equatable, Decodable {
   case string(String)
   case number(Double)
   case bool(Bool)
@@ -124,35 +127,25 @@ enum JSONValue: Sendable, Equatable {
   case array([JSONValue])
   case null
 
-  init?(_ any: Any) {
-    switch any {
-    case let value as String:
-      self = .string(value)
-    case let value as Bool where type(of: any) == type(of: true):
-      // `NSNumber` bridges bools and numbers into the same dynamic type; the
-      // `type(of:)` guard keeps `true`/`false` from being read as `1`/`0`.
-      self = .bool(value)
-    case let value as NSNumber:
-      // `NSNumber` covers Int/Double/Bool from `JSONSerialization`; bools are
-      // handled above, so treat the rest as numbers.
-      if value === kCFBooleanTrue || value === kCFBooleanFalse {
-        self = .bool(value.boolValue)
-      } else {
-        self = .number(value.doubleValue)
-      }
-    case let value as [Any]:
-      self = .array(value.compactMap(JSONValue.init))
-    case let value as [String: Any]:
-      var object: [String: JSONValue] = [:]
-      for (key, element) in value {
-        guard let converted = JSONValue(element) else { return nil }
-        object[key] = converted
-      }
-      self = .object(object)
-    case is NSNull:
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    // Order matters: probe `Bool` before `Double` (a JSON boolean must not be read
+    // as a number), and `nil` first so JSON `null` is not mis-typed.
+    if container.decodeNil() {
       self = .null
-    default:
-      return nil
+    } else if let value = try? container.decode(Bool.self) {
+      self = .bool(value)
+    } else if let value = try? container.decode(Double.self) {
+      self = .number(value)
+    } else if let value = try? container.decode(String.self) {
+      self = .string(value)
+    } else if let value = try? container.decode([JSONValue].self) {
+      self = .array(value)
+    } else if let value = try? container.decode([String: JSONValue].self) {
+      self = .object(value)
+    } else {
+      throw DecodingError.dataCorrupted(
+        .init(codingPath: decoder.codingPath, debugDescription: "Unsupported JSON value"))
     }
   }
 
