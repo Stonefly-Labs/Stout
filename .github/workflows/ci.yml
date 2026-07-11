@@ -1,18 +1,18 @@
 # Stout CI
 #
-# INTERIM: this workflow runs on a self-hosted runner while the maintainer
-# registers one. The macOS legs (swift build/test + swift-format lint) plus an
-# iOS-Simulator build leg run there today.
+# INTERIM: the macOS legs (swift build/test + swift-format lint) and the
+# iOS-Simulator build leg run on a self-hosted macOS runner while the maintainer
+# operates one. The Linux leg runs on a GitHub-hosted `ubuntu-latest` runner
+# inside the official `swift` container, so it does not depend on the self-hosted
+# runner.
 #
 # WHY macOS-alone is insufficient (design D6/D7): Stout is a cross-platform
 # exporter for opentelemetry-swift that runs on iOS, macOS, watchOS, tvOS and
 # Linux. Platform-specific transport (URLSession on Apple vs async-http-client
 # on Linux) and Foundation differences are real, so CI MUST cover the
-# iOS Simulator AND Linux — not just macOS.
+# iOS Simulator AND Linux — not just macOS. The Linux leg is the first real
+# compile of `AsyncHTTPClientTransport` and the `CZlib` system-zlib shim.
 #
-# TODO (Linux leg — still outstanding): add a Linux job on the official
-# `swift:6.x` Docker images (e.g. Ubuntu Jammy + Noble) once a Linux runner /
-# Docker is available, and eventually a GitHub-hosted macOS + Linux matrix.
 # See docs/speckit/00-foundation-setup.md §4.
 
 name: CI
@@ -29,6 +29,20 @@ jobs:
     runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v4
+      - name: swift build
+        run: swift build
+      - name: swift test
+        run: swift test
+
+  linux:
+    name: Build & Test (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      # zlib headers for the CZlib systemLibrary target (pkgConfig: "zlib").
+      - name: Install zlib
+        run: apt-get update && apt-get install -y --no-install-recommends zlib1g-dev
       - name: swift build
         run: swift build
       - name: swift test
