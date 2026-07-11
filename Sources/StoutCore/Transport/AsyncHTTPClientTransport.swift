@@ -9,7 +9,6 @@
   import AsyncHTTPClient
   import FoundationNetworking
   import NIOCore
-  import NIOFoundationCompat
   import NIOHTTP1
 
   import struct Foundation.Data
@@ -50,10 +49,12 @@
         headers[header.name] = header.value
       }
       let buffer = try await response.body.collect(upTo: maxResponseBytes)
+      // Convert via NIOCore's readable view so we don't depend on the optional
+      // NIOFoundationCompat module (not part of the async-http-client graph).
       return TransportResponse(
         statusCode: Int(response.status.code),
         headers: headers,
-        body: Data(buffer: buffer)
+        body: Data(buffer.readableBytesView)
       )
     }
 
