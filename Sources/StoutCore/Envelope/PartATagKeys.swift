@@ -23,4 +23,17 @@ public enum PartATagKeys {
   public static let deviceOSVersion = "ai.device.osVersion"
   /// Device manufacturer → `ai.device.oemName` (on-device).
   public static let deviceOEMName = "ai.device.oemName"
+
+  // MARK: Correlation (per-item; spec 02 distributed tracing)
+
+  /// Operation (trace) correlation id → `ai.operation.id`. Every telemetry item
+  /// in a span's tree carries the trace id here (data-model §2).
+  public static let operationId = "ai.operation.id"
+  /// Parent item correlation id → `ai.operation.parentId`. The owning span id for
+  /// derived items, or the span's parent id for the span item — **absent** for a
+  /// root span (data-model §2).
+  public static let operationParentId = "ai.operation.parentId"
+  /// Operation display name → `ai.operation.name`. The request name, set on
+  /// server/consumer items for transaction search (.NET parity).
+  public static let operationName = "ai.operation.name"
 }

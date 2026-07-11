@@ -45,21 +45,21 @@ HTTP mapper. Nothing here is story-specific.
 
 **⚠️ CRITICAL**: No user-story translation work can begin until this phase is complete.
 
-- [ ] T005 [P] Add `operationId` (`ai.operation.id`), `operationParentId` (`ai.operation.parentId`), and `operationName` (`ai.operation.name`) constants to `Sources/StoutCore/Envelope/PartATagKeys.swift` (data-model §2; the only StoutCore edit this feature makes).
-- [ ] T006 [P] `Sources/StoutTracing/Model/RequestData.swift` — `BaseData` conformer, `baseType = "RequestData"`, encodes `ver:2` first; fields `id/name/duration/responseCode/success/url?/source?/properties` (data-model §1a).
-- [ ] T007 [P] `Sources/StoutTracing/Model/RemoteDependencyData.swift` — `BaseData`, `baseType = "RemoteDependencyData"`, `ver:2`; fields `id/name/duration/resultCode/success/type/target?/data?/properties` (data-model §1b).
-- [ ] T008 [P] `Sources/StoutTracing/Model/ExceptionData.swift` — `BaseData`, `baseType = "ExceptionData"`, `ver:2`; `exceptions[].{typeName,message,hasFullStack,stack?}` + `properties` (data-model §1c).
-- [ ] T009 [P] `Sources/StoutTracing/Model/MessageData.swift` — `BaseData`, `baseType = "MessageData"`, `ver:2`; `message` + `properties` (data-model §1d).
-- [ ] T010 [P] `Sources/StoutTracing/Translation/BreezeDuration.swift` — `(endTime − startTime) → "d.hh:mm:ss.fffffff"`; zero/negative clamps to `0`, never crashes (mapping contract Determinism notes).
-- [ ] T011 [P] `Sources/StoutTracing/Translation/AttributeStringifier.swift` — single documented `AttributeValue → String` rule for `.string/.bool/.int/.double/.array/.set` (+ deprecated `*Array`), used for `properties` and stringified fields (data-model §0).
-- [ ] T012 [P] `Sources/StoutTracing/Translation/SemanticConventions.swift` — the current+legacy key table (data-model §5) with a current-wins lookup helper; deterministic, not attribute-order-dependent (INV-3, research.md D-07).
-- [ ] T013 [P] `Sources/StoutTracing/Translation/SpanKindMapping.swift` — `SpanKind → {Request | Dependency}` incl. unspecified→Dependency default (data-model §3, FR-006).
-- [ ] T014 [P] `Sources/StoutTracing/Translation/CorrelationMapping.swift` — the shared rule (FR-007/FR-024) operating on `TraceId`/`SpanId`/`SpanId?` (NOT `SpanData`, so spec 03 reuses it verbatim): `operationId ← traceId` (32-hex), item `id ← spanId` (16-hex), `parentId ← parentSpanId` absent-when-root; byte-for-byte lowercase hex.
-- [ ] T015 [P] `Sources/StoutTracing/Translation/SuccessPredicate.swift` — actual .NET `TraceHelper` logic (data-model §4, research.md D-03): error status ⇒ `success=false` always; Request unset-status HTTP ⇒ `code != 0 && code < 400` (4xx **and** 5xx fail); Dependency ⇒ `status != error` only (no code threshold); plus `responseCode`/`resultCode` derivation with `"0"` default.
-- [ ] T016 [P] `Sources/StoutTracing/Translation/HTTPMapping.swift` — shared HTTP derivation (url/target host[:port]/status/route-name) from current+legacy HTTP keys; consumed by US1 (Request) and US2 (Dependency).
-- [ ] T017 [P] `Tests/StoutTracingTests/BreezeDurationTests.swift` — duration formatting incl. zero/negative clamp and sub-second precision.
-- [ ] T018 [P] `Tests/StoutTracingTests/SemanticConventionPrecedenceTests.swift` — current-over-legacy precedence, order-independence (INV-3).
-- [ ] T019 [P] `Tests/StoutTracingTests/SpanKindMappingTests.swift` — full kind→type table incl. unspecified→Dependency (SC-001, FR-006).
+- [X] T005 [P] Add `operationId` (`ai.operation.id`), `operationParentId` (`ai.operation.parentId`), and `operationName` (`ai.operation.name`) constants to `Sources/StoutCore/Envelope/PartATagKeys.swift` (data-model §2; the only StoutCore edit this feature makes).
+- [X] T006 [P] `Sources/StoutTracing/Model/RequestData.swift` — `BaseData` conformer, `baseType = "RequestData"`, encodes `ver:2` first; fields `id/name/duration/responseCode/success/url?/source?/properties` (data-model §1a).
+- [X] T007 [P] `Sources/StoutTracing/Model/RemoteDependencyData.swift` — `BaseData`, `baseType = "RemoteDependencyData"`, `ver:2`; fields `id/name/duration/resultCode/success/type/target?/data?/properties` (data-model §1b).
+- [X] T008 [P] `Sources/StoutTracing/Model/ExceptionData.swift` — `BaseData`, `baseType = "ExceptionData"`, `ver:2`; `exceptions[].{typeName,message,hasFullStack,stack?}` + `properties` (data-model §1c).
+- [X] T009 [P] `Sources/StoutTracing/Model/MessageData.swift` — `BaseData`, `baseType = "MessageData"`, `ver:2`; `message` + `properties` (data-model §1d).
+- [X] T010 [P] `Sources/StoutTracing/Translation/BreezeDuration.swift` — `(endTime − startTime) → "d.hh:mm:ss.fffffff"`; zero/negative clamps to `0`, never crashes (mapping contract Determinism notes).
+- [X] T011 [P] `Sources/StoutTracing/Translation/AttributeStringifier.swift` — single documented `AttributeValue → String` rule for `.string/.bool/.int/.double/.array/.set` (+ deprecated `*Array`), used for `properties` and stringified fields (data-model §0).
+- [X] T012 [P] `Sources/StoutTracing/Translation/SemanticConventions.swift` — the current+legacy key table (data-model §5) with a current-wins lookup helper; deterministic, not attribute-order-dependent (INV-3, research.md D-07).
+- [X] T013 [P] `Sources/StoutTracing/Translation/SpanKindMapping.swift` — `SpanKind → {Request | Dependency}` incl. unspecified→Dependency default (data-model §3, FR-006).
+- [X] T014 [P] `Sources/StoutTracing/Translation/CorrelationMapping.swift` — the shared rule (FR-007/FR-024) operating on `TraceId`/`SpanId`/`SpanId?` (NOT `SpanData`, so spec 03 reuses it verbatim): `operationId ← traceId` (32-hex), item `id ← spanId` (16-hex), `parentId ← parentSpanId` absent-when-root; byte-for-byte lowercase hex.
+- [X] T015 [P] `Sources/StoutTracing/Translation/SuccessPredicate.swift` — actual .NET `TraceHelper` logic (data-model §4, research.md D-03): error status ⇒ `success=false` always; Request unset-status HTTP ⇒ `code != 0 && code < 400` (4xx **and** 5xx fail); Dependency ⇒ `status != error` only (no code threshold); plus `responseCode`/`resultCode` derivation with `"0"` default.
+- [X] T016 [P] `Sources/StoutTracing/Translation/HTTPMapping.swift` — shared HTTP derivation (url/target host[:port]/status/route-name) from current+legacy HTTP keys; consumed by US1 (Request) and US2 (Dependency).
+- [X] T017 [P] `Tests/StoutTracingTests/BreezeDurationTests.swift` — duration formatting incl. zero/negative clamp and sub-second precision.
+- [X] T018 [P] `Tests/StoutTracingTests/SemanticConventionPrecedenceTests.swift` — current-over-legacy precedence, order-independence (INV-3).
+- [X] T019 [P] `Tests/StoutTracingTests/SpanKindMappingTests.swift` — full kind→type table incl. unspecified→Dependency (SC-001, FR-006).
 
 **Checkpoint**: Building blocks compile clean under Swift 6 strict concurrency; foundational unit suites pass. User stories can now begin.
 
