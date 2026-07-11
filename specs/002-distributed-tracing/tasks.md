@@ -61,6 +61,7 @@ HTTP mapper. Nothing here is story-specific.
 - [X] T018 [P] `Tests/StoutTracingTests/SemanticConventionPrecedenceTests.swift` — current-over-legacy precedence, order-independence (INV-3).
 - [X] T019 [P] `Tests/StoutTracingTests/SpanKindMappingTests.swift` — full kind→type table incl. unspecified→Dependency (SC-001, FR-006).
 
+
 **Checkpoint**: Building blocks compile clean under Swift 6 strict concurrency; foundational unit suites pass. User stories can now begin.
 
 ---
