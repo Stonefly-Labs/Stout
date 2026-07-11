@@ -14,6 +14,8 @@ import StoutCore
 /// the surrounding envelope's Part A tags, not here.
 struct RequestData: BaseData {
   static let baseType = "RequestData"
+  /// The Breeze telemetry item type name routed to the envelope `name` field.
+  static let telemetryName = "Microsoft.ApplicationInsights.Request"
 
   /// Breeze schema version — always `2`.
   let ver: Int

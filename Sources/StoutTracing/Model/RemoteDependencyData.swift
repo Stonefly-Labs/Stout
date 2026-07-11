@@ -12,6 +12,8 @@ import StoutCore
 /// Encodes `"ver": 2` first; optional `target`/`data` are omitted when `nil`.
 struct RemoteDependencyData: BaseData {
   static let baseType = "RemoteDependencyData"
+  /// The Breeze telemetry item type name routed to the envelope `name` field.
+  static let telemetryName = "Microsoft.ApplicationInsights.RemoteDependency"
 
   /// Breeze schema version — always `2`.
   let ver: Int

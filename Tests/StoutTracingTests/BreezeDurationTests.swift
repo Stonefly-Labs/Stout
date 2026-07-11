@@ -33,7 +33,10 @@ final class BreezeDurationTests: XCTestCase {
 
   func testDayGroupPresentOnlyWhenNonZero() {
     // 2d 3h 4m 5s.
-    let seconds: TimeInterval = 2 * 86_400 + 3 * 3600 + 4 * 60 + 5
+    // Compute in `Int` then convert once: assigning untyped-literal arithmetic
+    // straight to a `TimeInterval` makes the Swift type-checker enumerate every
+    // numeric-literal overload and time out on Linux.
+    let seconds = TimeInterval(2 * 86_400 + 3 * 3600 + 4 * 60 + 5)
     XCTAssertEqual(duration(seconds: seconds), "2.03:04:05")
     // Exactly one day.
     XCTAssertEqual(duration(seconds: 86_400), "1.00:00:00")
@@ -49,7 +52,7 @@ final class BreezeDurationTests: XCTestCase {
 
   func testExtremeDurationClampsToMax() {
     // ≥ 1000 days clamps to the .NET Duration_MaxValue literal.
-    XCTAssertEqual(duration(seconds: 1000 * 86_400 + 10), "999.23:59:59.9999999")
+    XCTAssertEqual(duration(seconds: TimeInterval(1000 * 86_400 + 10)), "999.23:59:59.9999999")
   }
 
   func testDeterministicForIdenticalInput() {
