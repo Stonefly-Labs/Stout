@@ -17,9 +17,18 @@ the same model as .NET's `Azure.Monitor.OpenTelemetry.Exporter`.
 
 ## Status
 
-**Pre-release — work in progress.** This is Phase 0 scaffolding: the module graph
-compiles, but no telemetry is exported yet. APIs are unstable and will change before
-1.0. Not ready for production use. Follow along via [`docs/`](docs/).
+**Pre-release — work in progress.** APIs are unstable and will change before 1.0.
+Not ready for production use. Follow along via [`docs/`](docs/).
+
+The **core ingestion foundation** (spec 01) is built and tested in `StoutCore`:
+connection-string parsing and validation (fail-closed, HTTPS-only, secrets never
+logged), the Breeze envelope model, a bounded drop-on-overflow export pipeline with
+reliable retry/backoff and partial-success handling, gzip newline-JSON transport
+(`URLSession` on Apple, async-http-client on Linux), drain-and-go-inert shutdown, and
+resource detection into Part A tags. The consumer-facing **signal exporters** that
+plug into an `opentelemetry-swift` provider — `SpanExporter` (traces),
+`LogRecordExporter` (logs), `MetricExporter` (metrics) — are next; until they land you
+cannot yet register Stout with a `TracerProvider`/`LoggerProvider`/`MeterProvider`.
 
 ## Planned features
 
