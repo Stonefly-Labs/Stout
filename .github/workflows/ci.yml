@@ -36,7 +36,11 @@ jobs:
 
   linux:
     name: Build & Test (Linux)
-    runs-on: [self-hosted, Linux]
+    # Keyed off the `Linux` label alone: org-scoped/ARC runners don't carry the
+    # automatic `self-hosted` label that classic runners get, so requiring both
+    # would never match. `Linux` is a custom label, so this still only routes to
+    # our self-hosted runner (GitHub-hosted runners never match bare labels).
+    runs-on: [Linux]
     # swift:6.2+ required — transitive deps (async-http-client, swift-log) now
     # declare swift-tools 6.2; the older 6.0 image fails to resolve them. The
     # container requires a Docker-capable self-hosted `linux` runner.
