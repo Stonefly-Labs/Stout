@@ -1,10 +1,10 @@
 # Stout CI
 #
-# INTERIM: the macOS legs (swift build/test + swift-format lint) and the
-# iOS-Simulator build leg run on a self-hosted macOS runner while the maintainer
-# operates one. The Linux leg runs on a GitHub-hosted `ubuntu-latest` runner
-# inside the official `swift` container, so it does not depend on the self-hosted
-# runner.
+# INTERIM: all legs run on self-hosted runners while the maintainer operates
+# them. The macOS legs (swift build/test + swift-format lint) and the
+# iOS-Simulator build leg run on the self-hosted macOS runner; the Linux leg runs
+# on a self-hosted `linux` runner (Docker-capable) inside the official `swift`
+# container, which pins the toolchain.
 #
 # WHY macOS-alone is insufficient (design D6/D7): Stout is a cross-platform
 # exporter for opentelemetry-swift that runs on iOS, macOS, watchOS, tvOS and
@@ -36,9 +36,10 @@ jobs:
 
   linux:
     name: Build & Test (Linux)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     # swift:6.2+ required — transitive deps (async-http-client, swift-log) now
-    # declare swift-tools 6.2; the older 6.0 image fails to resolve them.
+    # declare swift-tools 6.2; the older 6.0 image fails to resolve them. The
+    # container requires a Docker-capable self-hosted `linux` runner.
     container: swift:6.2
     steps:
       - uses: actions/checkout@v4
