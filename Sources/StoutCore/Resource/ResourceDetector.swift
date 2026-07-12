@@ -8,7 +8,7 @@ import OpenTelemetrySdk
 
 /// Derives the resource-level Application Insights **Part A** tags once, from the
 /// OpenTelemetry `Resource` (plus the library's own SDK version), for the
-/// `EnvelopeFactory` to stamp onto every envelope (FR-018–FR-022, Acc #10).
+/// `EnvelopeFactory` to stamp onto every envelope (FR-018–FR-021, Acc #10).
 ///
 /// The role/version mapping mirrors the .NET Azure Monitor exporter
 /// (`ResourceExtensions.CreateAzureMonitorResource`) so a Swift app and a .NET
@@ -19,7 +19,7 @@ import OpenTelemetrySdk
 ///   present (bracketed namespace, `/` separator — the exact .NET form), otherwise
 ///   just `service.name`. Omitted when no service name is available.
 /// - `ai.cloud.roleInstance` ← `service.instance.id`, falling back to the OTel
-///   `host.name` resource attribute (per this spec's FR-020).
+///   `host.name` resource attribute (per this spec's FR-018).
 /// - `ai.internal.sdkVersion` ← `stout:<version>` (always).
 /// - On-device (when the OTel resource carries them): `ai.application.ver` ←
 ///   `service.version`; `ai.device.*` ← `device.*` / `os.*`.
@@ -30,9 +30,9 @@ import OpenTelemetrySdk
 /// mapping; live host/instance identity is expected to arrive via the OTel
 /// `Resource` detectors or an explicit override. (2) `ai.device.*` are mapped from
 /// the OTel `device.*`/`os.*` resource attributes because Stout runs on-device;
-/// .NET (server-side) does not populate these from the Resource (FR-020, Acc #10).
+/// .NET (server-side) does not populate these from the Resource (FR-019, Acc #10).
 ///
-/// **Explicit overrides beat detection** (FR-022): any tag supplied in `overrides`
+/// **Explicit overrides beat detection** (FR-020): any tag supplied in `overrides`
 /// replaces the detected value for the same key. The result is computed once and is
 /// immutable.
 public enum ResourceDetector {
@@ -42,7 +42,7 @@ public enum ResourceDetector {
   ///   - resource: the OpenTelemetry `Resource` whose attributes are mapped. Pass
   ///     `Resource()` (the SDK default) or a resource with detected/explicit
   ///     attributes.
-  ///   - overrides: tags that take precedence over detection (FR-022). Empty by
+  ///   - overrides: tags that take precedence over detection (FR-020). Empty by
   ///     default.
   /// - Returns: the merged, immutable resource `TelemetryTags`.
   public static func detect(
@@ -54,7 +54,7 @@ public enum ResourceDetector {
     // Always stamp our own SDK identity (FR-021).
     tags[PartATagKeys.internalSdkVersion] = StoutVersion.sdkVersion
 
-    // ai.cloud.role / ai.cloud.roleInstance (FR-019/FR-020).
+    // ai.cloud.role / ai.cloud.roleInstance (FR-018).
     if let role = cloudRole(from: resource) {
       tags[PartATagKeys.cloudRole] = role
     }
