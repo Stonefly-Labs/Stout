@@ -36,7 +36,7 @@ jobs:
 
   linux:
     name: Build & Test (Linux)
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux]
     # swift:6.2+ required — transitive deps (async-http-client, swift-log) now
     # declare swift-tools 6.2; the older 6.0 image fails to resolve them. The
     # container requires a Docker-capable self-hosted `linux` runner.
