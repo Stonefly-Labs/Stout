@@ -52,14 +52,18 @@ jobs:
       # swift:6.2+ is required — transitive deps (async-http-client, swift-log)
       # declare swift-tools 6.2, which the 6.0 image can't resolve. zlib1g-dev
       # supplies the headers for the CZlib systemLibrary target (pkgConfig: "zlib").
+      # `-j 2` caps compile parallelism: swift build/test otherwise spawn one
+      # frontend per core, each 1–2 GB, which starved/killed the containerized
+      # runner mid-compile of the full OTel + swift-nio graph. Fewer parallel jobs
+      # = lower peak memory. Raise if the runner gets more RAM.
       - name: swift build + test (swift:6.2)
         run: |
           tar -C "$GITHUB_WORKSPACE" -cf - . \
             | docker run --rm -i -w /src swift:6.2 bash -euxo pipefail -c '
                 mkdir -p /src && tar -C /src -xf -
                 apt-get update && apt-get install -y --no-install-recommends zlib1g-dev
-                swift build
-                swift test
+                swift build -j 2
+                swift test -j 2
               '
 
   ios-simulator:
