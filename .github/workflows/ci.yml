@@ -40,21 +40,27 @@ jobs:
   linux:
     name: Build & Test (Linux)
     # Route by the `Linux` label to the repo-scoped Docker-host runner. The runner
-    # provides Docker, so GitHub runs this job inside the container below and mounts
-    # the checkout for us — no manual `docker run`/volume juggling.
+    # agent itself runs inside a container, so its `_work`/`externals` dirs are NOT
+    # visible to the host Docker daemon. That rules out both the job-level
+    # `container:` key (its `/__e` node mount lands empty → JS actions like checkout
+    # fail) and a naive `-v $GITHUB_WORKSPACE` mount (resolves to an empty host
+    # path). So we let checkout run on the runner (where Node lives) and STREAM the
+    # tree into swift:6.2 over stdin via tar — no shared volume, no path alignment.
     runs-on: [Linux]
-    # swift:6.2+ is required — transitive deps (async-http-client, swift-log)
-    # declare swift-tools 6.2, which the 6.0 image can't resolve.
-    container: swift:6.2
     steps:
       - uses: actions/checkout@v4
-      # zlib headers for the CZlib systemLibrary target (pkgConfig: "zlib").
-      - name: Install zlib
-        run: apt-get update && apt-get install -y --no-install-recommends zlib1g-dev
-      - name: swift build
-        run: swift build
-      - name: swift test
-        run: swift test
+      # swift:6.2+ is required — transitive deps (async-http-client, swift-log)
+      # declare swift-tools 6.2, which the 6.0 image can't resolve. zlib1g-dev
+      # supplies the headers for the CZlib systemLibrary target (pkgConfig: "zlib").
+      - name: swift build + test (swift:6.2)
+        run: |
+          tar -C "$GITHUB_WORKSPACE" -cf - . \
+            | docker run --rm -i -w /src swift:6.2 bash -euxo pipefail -c '
+                mkdir -p /src && tar -C /src -xf -
+                apt-get update && apt-get install -y --no-install-recommends zlib1g-dev
+                swift build
+                swift test
+              '
 
   ios-simulator:
     name: Build (iOS Simulator)
