@@ -3,11 +3,11 @@
 # INTERIM: all legs run on self-hosted runners while the maintainer operates
 # them. The macOS legs (swift build/test + swift-format lint) and the
 # iOS-Simulator build leg run on the self-hosted macOS runner; the Linux leg runs
-# on the self-hosted `Linux`/`docker` runner. That runner hosts the runner agent
-# itself inside a container, so it cannot accept a job that uses the `container:`
-# key (GitHub won't nest a job container in a containerized runner — such jobs sit
-# queued forever). Instead the Linux leg drives the official `swift:6.2` image
-# itself via the runner's Docker daemon, which pins the toolchain the same way.
+# on the repo-scoped `Linux`/`docker` runner (a Docker-host runner) inside the
+# official `swift:6.2` container via the job-level `container:` key, which pins the
+# toolchain. The runner must be repo-scoped: Stout is a public repo, and org-level
+# runner groups block public repositories by default, so an org runner's jobs sit
+# queued forever.
 #
 # WHY macOS-alone is insufficient (design D6/D7): Stout is a cross-platform
 # exporter for opentelemetry-swift that runs on iOS, macOS, watchOS, tvOS and
@@ -39,31 +39,22 @@ jobs:
 
   linux:
     name: Build & Test (Linux)
-    # Route to the containerized self-hosted runner by its `Linux` label. We do NOT
-    # use the job-level `container:` key here — that runner runs the agent inside a
-    # container and GitHub will not dispatch a job-container job to it (it would sit
-    # queued forever). We run the toolchain container ourselves via its Docker
-    # daemon instead.
+    # Route by the `Linux` label to the repo-scoped Docker-host runner. The runner
+    # provides Docker, so GitHub runs this job inside the container below and mounts
+    # the checkout for us — no manual `docker run`/volume juggling.
     runs-on: [Linux]
+    # swift:6.2+ is required — transitive deps (async-http-client, swift-log)
+    # declare swift-tools 6.2, which the 6.0 image can't resolve.
+    container: swift:6.2
     steps:
       - uses: actions/checkout@v4
-      # Drive swift:6.2 through the runner's own Docker daemon (docker-outside-of-
-      # docker). swift:6.2+ is required — transitive deps (async-http-client,
-      # swift-log) declare swift-tools 6.2, which the 6.0 image can't resolve.
-      # zlib1g-dev supplies the headers for the CZlib systemLibrary target.
-      # $GITHUB_WORKSPACE is bind-mounted at the same path so SwiftPM sees the
-      # checkout; the runner's work dir is shared with the host, so the path aligns.
-      - name: swift build + test (swift:6.2)
-        run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE":"$GITHUB_WORKSPACE" \
-            -w "$GITHUB_WORKSPACE" \
-            swift:6.2 \
-            bash -euxo pipefail -c '
-              apt-get update && apt-get install -y --no-install-recommends zlib1g-dev
-              swift build
-              swift test
-            '
+      # zlib headers for the CZlib systemLibrary target (pkgConfig: "zlib").
+      - name: Install zlib
+        run: apt-get update && apt-get install -y --no-install-recommends zlib1g-dev
+      - name: swift build
+        run: swift build
+      - name: swift test
+        run: swift test
 
   ios-simulator:
     name: Build (iOS Simulator)
