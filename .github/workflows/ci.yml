@@ -1,10 +1,13 @@
 # Stout CI
 #
-# INTERIM: the macOS legs (swift build/test + swift-format lint) and the
-# iOS-Simulator build leg run on a self-hosted macOS runner while the maintainer
-# operates one. The Linux leg runs on a GitHub-hosted `ubuntu-latest` runner
-# inside the official `swift` container, so it does not depend on the self-hosted
-# runner.
+# INTERIM: all legs run on self-hosted runners while the maintainer operates
+# them. The macOS legs (swift build/test + swift-format lint) and the
+# iOS-Simulator build leg run on the self-hosted macOS runner; the Linux leg runs
+# on the repo-scoped `Linux`/`docker` runner (a Docker-host runner) inside the
+# official `swift:6.2` container via the job-level `container:` key, which pins the
+# toolchain. The runner must be repo-scoped: Stout is a public repo, and org-level
+# runner groups block public repositories by default, so an org runner's jobs sit
+# queued forever.
 #
 # WHY macOS-alone is insufficient (design D6/D7): Stout is a cross-platform
 # exporter for opentelemetry-swift that runs on iOS, macOS, watchOS, tvOS and
@@ -36,19 +39,32 @@ jobs:
 
   linux:
     name: Build & Test (Linux)
-    runs-on: ubuntu-latest
-    # swift:6.2+ required — transitive deps (async-http-client, swift-log) now
-    # declare swift-tools 6.2; the older 6.0 image fails to resolve them.
-    container: swift:6.2
+    # Route by the `Linux` label to the repo-scoped Docker-host runner. The runner
+    # agent itself runs inside a container, so its `_work`/`externals` dirs are NOT
+    # visible to the host Docker daemon. That rules out both the job-level
+    # `container:` key (its `/__e` node mount lands empty → JS actions like checkout
+    # fail) and a naive `-v $GITHUB_WORKSPACE` mount (resolves to an empty host
+    # path). So we let checkout run on the runner (where Node lives) and STREAM the
+    # tree into swift:6.2 over stdin via tar — no shared volume, no path alignment.
+    runs-on: [Linux]
     steps:
       - uses: actions/checkout@v4
-      # zlib headers for the CZlib systemLibrary target (pkgConfig: "zlib").
-      - name: Install zlib
-        run: apt-get update && apt-get install -y --no-install-recommends zlib1g-dev
-      - name: swift build
-        run: swift build
-      - name: swift test
-        run: swift test
+      # swift:6.2+ is required — transitive deps (async-http-client, swift-log)
+      # declare swift-tools 6.2, which the 6.0 image can't resolve. zlib1g-dev
+      # supplies the headers for the CZlib systemLibrary target (pkgConfig: "zlib").
+      # `-j 2` caps compile parallelism: swift build/test otherwise spawn one
+      # frontend per core, each 1–2 GB, which starved/killed the containerized
+      # runner mid-compile of the full OTel + swift-nio graph. Fewer parallel jobs
+      # = lower peak memory. Raise if the runner gets more RAM.
+      - name: swift build + test (swift:6.2)
+        run: |
+          tar -C "$GITHUB_WORKSPACE" -cf - . \
+            | docker run --rm -i -w /src swift:6.2 bash -euxo pipefail -c '
+                mkdir -p /src && tar -C /src -xf -
+                apt-get update && apt-get install -y --no-install-recommends zlib1g-dev
+                swift build -j 2
+                swift test -j 2
+              '
 
   ios-simulator:
     name: Build (iOS Simulator)

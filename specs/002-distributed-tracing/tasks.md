@@ -61,7 +61,6 @@ HTTP mapper. Nothing here is story-specific.
 - [X] T018 [P] `Tests/StoutTracingTests/SemanticConventionPrecedenceTests.swift` — current-over-legacy precedence, order-independence (INV-3).
 - [X] T019 [P] `Tests/StoutTracingTests/SpanKindMappingTests.swift` — full kind→type table incl. unspecified→Dependency (SC-001, FR-006).
 
-
 **Checkpoint**: Building blocks compile clean under Swift 6 strict concurrency; foundational unit suites pass. User stories can now begin.
 
 ---
@@ -134,13 +133,13 @@ root span yields empty/absent `parentId`.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T038 [P] [US3] `Tests/StoutTracingTests/CorrelationMappingTests.swift` — byte-for-byte 32-hex `operationId`/16-hex item id/`parentId`; root span ⇒ absent `parentId` (INV-2, SC-002).
-- [ ] T039 [P] [US3] `Tests/StoutTracingTests/CrossTierCorrelationTests.swift` — caller `.client` + callee `.server`: shared `operationId`, callee `parentId` = caller item id (SC-005, US3 Acc 3).
-- [ ] T040 [P] [US3] `Tests/StoutTracingTests/SharedCorrelationRuleTests.swift` — assert `CorrelationMapping` produces identical `ai.operation.*` for the same ids regardless of source signal (SC-007 stub for spec 03 reuse, FR-024).
+- [X] T038 [P] [US3] `Tests/StoutTracingTests/CorrelationMappingTests.swift` — byte-for-byte 32-hex `operationId`/16-hex item id/`parentId`; root span ⇒ absent `parentId` (INV-2, SC-002).
+- [X] T039 [P] [US3] `Tests/StoutTracingTests/CrossTierCorrelationTests.swift` — caller `.client` + callee `.server`: shared `operationId`, callee `parentId` = caller item id (SC-005, US3 Acc 3).
+- [X] T040 [P] [US3] `Tests/StoutTracingTests/SharedCorrelationRuleTests.swift` — assert `CorrelationMapping` produces identical `ai.operation.*` for the same ids regardless of source signal (SC-007 stub for spec 03 reuse, FR-024).
 
 ### Implementation for User Story 3
 
-- [ ] T041 [US3] Verify/patch `SpanTranslator` so root-span `parentId` is truly absent (not empty string) on the wire and `operationName` is set for server/consumer (data-model §2); no new correlation logic — `CorrelationMapping` (T014) is the single source (FR-007).
+- [X] T041 [US3] Verify/patch `SpanTranslator` so root-span `parentId` is truly absent (not empty string) on the wire and `operationName` is set for server/consumer (data-model §2); no new correlation logic — `CorrelationMapping` (T014) is the single source (FR-007). **Verified — no patch needed**: `CorrelationMapping.spanTags` already omits `ai.operation.parentId` entirely when `parentSpanId == nil` (root), and `SpanTranslator.requestEnvelope` sets `ai.operation.name` only on the Request path (`.server`/`.consumer`), confirmed on the wire by `CrossTierCorrelationTests` / `CorrelationMappingTests`.
 
 **Checkpoint**: Correlation is provably lossless and shared with the spec-03 contract.
 
