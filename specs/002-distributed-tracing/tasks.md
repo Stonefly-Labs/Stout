@@ -156,13 +156,13 @@ alone (no event) ⇒ `success=false`, no fabricated `ExceptionData`.
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T042 [P] [US4] `Tests/StoutTracingTests/EventMappingTests.swift` (exception path) — `exception` event ⇒ correlated `ExceptionData`; `hasFullStack`/`stack` only when `exception.stacktrace` present (US4 Acc 2, INV-4).
-- [ ] T043 [P] [US4] `Tests/StoutTracingTests/ExceptionErrorStatusTests.swift` — error status forces `success=false` even with no event; drop rule: no `ExceptionData` unless both `exception.type` **and** `exception.message` present (US4 Acc 1, data-model D-08).
+- [X] T042 [P] [US4] `Tests/StoutTracingTests/EventMappingTests.swift` (exception path) — `exception` event ⇒ correlated `ExceptionData`; `hasFullStack`/`stack` only when `exception.stacktrace` present (US4 Acc 2, INV-4).
+- [X] T043 [P] [US4] `Tests/StoutTracingTests/ExceptionErrorStatusTests.swift` — error status forces `success=false` even with no event; drop rule: no `ExceptionData` unless both `exception.type` **and** `exception.message` present (US4 Acc 1, data-model D-08).
 
 ### Implementation for User Story 4
 
-- [ ] T044 [US4] `Sources/StoutTracing/Translation/EventMapping.swift` — `exception` event → `ExceptionData` (type/message/stacktrace, remaining event attrs → `properties`), correlated `parentId` = span id; enforce the both-fields-present drop rule (FR-019, data-model D-08).
-- [ ] T045 [US4] Wire `EventMapping` exception output into `SpanTranslator` step 6 and confirm error status → `success=false` on the owning Request/Dependency independent of events (FR-021, INV-4).
+- [X] T044 [US4] `Sources/StoutTracing/Translation/EventMapping.swift` — `exception` event → `ExceptionData` (type/message/stacktrace, remaining event attrs → `properties`), correlated `parentId` = span id; enforce the both-fields-present drop rule (FR-019, data-model D-08).
+- [X] T045 [US4] Wire `EventMapping` exception output into `SpanTranslator` step 6 and confirm error status → `success=false` on the owning Request/Dependency independent of events (FR-021, INV-4). **Error-status → `success=false` needed no code change** — `SuccessPredicate` already forces it for both item families; confirmed by `ExceptionErrorStatusTests`.
 
 **Checkpoint**: Failures are visible and correctly correlated.
 

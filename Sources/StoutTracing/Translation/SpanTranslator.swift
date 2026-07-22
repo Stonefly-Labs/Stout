@@ -42,14 +42,18 @@ enum SpanTranslator {
   ///
   /// `.server`/`.consumer` spans become exactly one `RequestData`; all other kinds
   /// become a `RemoteDependencyData`. Exactly one Request/Dependency item per span
-  /// (INV-1).
+  /// (INV-1), followed by one correlated item per emitted span event (an `exception`
+  /// event ⇒ `ExceptionData`, US4; non-`exception` events ⇒ `MessageData`, US5).
   static func translate(_ span: SpanData, using factory: EnvelopeFactory) -> [Envelope] {
+    var envelopes: [Envelope]
     switch SpanKindMapping.itemType(for: span.kind) {
     case .request:
-      return [requestEnvelope(for: span, using: factory)]
+      envelopes = [requestEnvelope(for: span, using: factory)]
     case .dependency:
-      return [dependencyEnvelope(for: span, using: factory)]
+      envelopes = [dependencyEnvelope(for: span, using: factory)]
     }
+    envelopes.append(contentsOf: eventEnvelopes(for: span, using: factory))
+    return envelopes
   }
 
   // MARK: - Request path (User Story 1)
@@ -85,6 +89,34 @@ enum SpanTranslator {
       time: span.startTime,
       sampleRate: defaultSampleRate,
       itemTags: tags)
+  }
+
+  // MARK: - Event-derived items (User Story 4/5)
+
+  /// One correlated envelope per emitted span event, in span-event order. An
+  /// `exception` event with both `exception.type` and `exception.message` becomes an
+  /// `ExceptionData` (US4, FR-019); events failing the drop rule are skipped, and
+  /// non-`exception` events are handled by US5. Every event item hangs under the
+  /// owning span — `ai.operation.parentId` = span id (`CorrelationMapping.eventTags`,
+  /// data-model §2) — with the same operation id, and is stamped at the event's own
+  /// timestamp. Error status → `success = false` is owned by the Request/Dependency
+  /// item's `SuccessPredicate`, independent of whether any event is present (INV-4).
+  private static func eventEnvelopes(
+    for span: SpanData, using factory: EnvelopeFactory
+  ) -> [Envelope] {
+    var envelopes: [Envelope] = []
+    for event in span.events where EventMapping.isException(event) {
+      guard let data = EventMapping.exceptionData(from: event) else { continue }
+      let tags = CorrelationMapping.eventTags(traceId: span.traceId, owningSpanId: span.spanId)
+      envelopes.append(
+        factory.makeEnvelope(
+          name: ExceptionData.telemetryName,
+          payload: data,
+          time: event.timestamp,
+          sampleRate: defaultSampleRate,
+          itemTags: tags))
+    }
+    return envelopes
   }
 
   // MARK: - Shared property carriage

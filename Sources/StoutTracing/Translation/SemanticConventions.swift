@@ -54,6 +54,12 @@ enum SemanticConventions {
 
   static let peerService = "peer.service"
 
+  // Exception span-event attributes (OTel `exception` event, data-model §1c).
+  static let exceptionEventName = "exception"
+  static let exceptionType = "exception.type"
+  static let exceptionMessage = "exception.message"
+  static let exceptionStacktrace = "exception.stacktrace"
+
   // MARK: Precedence lists (current first, then legacy)
 
   static let httpMethod = [httpRequestMethod, httpMethodLegacy]

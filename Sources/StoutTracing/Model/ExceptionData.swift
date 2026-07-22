@@ -15,6 +15,9 @@ import StoutCore
 struct ExceptionData: BaseData {
   static let baseType = "ExceptionData"
 
+  /// The Breeze telemetry item name for the enclosing envelope.
+  static let telemetryName = "Microsoft.ApplicationInsights.Exception"
+
   /// One exception occurrence (Breeze `ExceptionDetails`).
   struct Details: Sendable, Encodable {
     /// Exception type name (`exception.type`).
