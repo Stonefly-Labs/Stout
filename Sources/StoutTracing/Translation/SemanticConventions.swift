@@ -60,6 +60,10 @@ enum SemanticConventions {
   static let exceptionMessage = "exception.message"
   static let exceptionStacktrace = "exception.stacktrace"
 
+  /// Optional message text on a non-`exception` span event; when present it supplies
+  /// the `MessageData.message` in place of the event name (US5, FR-020).
+  static let messageAttribute = "message"
+
   // MARK: Precedence lists (current first, then legacy)
 
   static let httpMethod = [httpRequestMethod, httpMethodLegacy]

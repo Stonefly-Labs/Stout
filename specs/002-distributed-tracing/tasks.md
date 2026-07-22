@@ -177,11 +177,11 @@ alone (no event) ⇒ `success=false`, no fabricated `ExceptionData`.
 
 ### Tests for User Story 5 ⚠️
 
-- [ ] T046 [P] [US5] `EventMappingTests.swift` (message path) — non-`exception` event ⇒ one correlated `MessageData` with name/message and attrs → `properties` (US5 Acc 1, FR-020).
+- [X] T046 [P] [US5] `EventMappingTests.swift` (message path) — non-`exception` event ⇒ one correlated `MessageData` with name/message and attrs → `properties` (US5 Acc 1, FR-020).
 
 ### Implementation for User Story 5
 
-- [ ] T047 [US5] Extend `Sources/StoutTracing/Translation/EventMapping.swift` — non-`exception` event → `MessageData` (message ← event name / `message` attr; attrs → `properties`), correlated `parentId` = span id; wire into `SpanTranslator` step 6 (FR-020).
+- [X] T047 [US5] Extend `Sources/StoutTracing/Translation/EventMapping.swift` — non-`exception` event → `MessageData` (message ← event name / `message` attr; attrs → `properties`), correlated `parentId` = span id; wire into `SpanTranslator` step 6 (FR-020).
 
 **Checkpoint**: Per-event checkpoints enrich the transaction.
 

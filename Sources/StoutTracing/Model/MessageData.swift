@@ -11,6 +11,7 @@ import StoutCore
 /// Encodes `"ver": 2` first.
 struct MessageData: BaseData {
   static let baseType = "MessageData"
+  static let telemetryName = "Microsoft.ApplicationInsights.Message"
 
   /// Breeze schema version — always `2`.
   let ver: Int
