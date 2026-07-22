@@ -29,7 +29,10 @@ on:
 jobs:
   build-test:
     name: Build & Test (macOS)
-    runs-on: [self-hosted]
+    # Pin to macOS: the Linux runner also carries the `self-hosted` label, so a bare
+    # `[self-hosted]` can schedule this Mac-only job onto Linux (no Swift toolchain
+    # on that host → `swift: command not found`).
+    runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
       - name: swift build
@@ -77,7 +80,8 @@ jobs:
 
   ios-simulator:
     name: Build (iOS Simulator)
-    runs-on: [self-hosted]
+    # Pin to macOS (see build-test) — xcodebuild is Apple-only.
+    runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
       # Generic destination — builds for the simulator without booting one.
@@ -89,7 +93,8 @@ jobs:
 
   lint:
     name: Lint (swift-format)
-    runs-on: [self-hosted]
+    # Pin to macOS (see build-test) — swift-format lives on the Mac runner.
+    runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
       - name: swift format lint
