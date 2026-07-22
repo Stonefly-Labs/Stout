@@ -234,4 +234,44 @@ extension TracingTestHarness {
       final.count, count, "timed out waiting for \(count) envelope(s)", file: file, line: line)
     return final
   }
+
+  /// Poll until at least `count` items are buffered in the pipeline. Submission is
+  /// fire-and-forget (`submit(_:)` enqueues on the actor asynchronously), so a
+  /// `flush()` test must first confirm the items have landed in the buffer before
+  /// forcing the drain — otherwise it would flush an empty buffer (US6 Acc #1).
+  func waitForBuffered(
+    atLeast count: Int,
+    timeout: TimeInterval = 2.0,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) async {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if await pipeline.bufferedCount >= count { return }
+      try? await Task.sleep(nanoseconds: 5_000_000)
+    }
+    let final = await pipeline.bufferedCount
+    XCTAssertGreaterThanOrEqual(
+      final, count, "timed out waiting for \(count) buffered item(s)", file: file, line: line)
+  }
+
+  /// Poll until the pipeline's cumulative dropped count reaches `count`. Post-
+  /// shutdown submits are dropped asynchronously on the actor, so lifecycle tests
+  /// synchronize on this authoritative accounting rather than on wall-clock time.
+  func waitForDropped(
+    atLeast count: Int,
+    timeout: TimeInterval = 2.0,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) async {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if await pipeline.droppedCount >= UInt64(count) { return }
+      try? await Task.sleep(nanoseconds: 5_000_000)
+    }
+    let final = await pipeline.droppedCount
+    XCTAssertGreaterThanOrEqual(
+      final, UInt64(count), "timed out waiting for \(count) dropped item(s)",
+      file: file, line: line)
+  }
 }
