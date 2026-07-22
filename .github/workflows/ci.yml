@@ -50,21 +50,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # swift:6.2+ is required — transitive deps (async-http-client, swift-log)
-      # declare swift-tools 6.2, which the 6.0 image can't resolve. zlib1g-dev
-      # supplies the headers for the CZlib systemLibrary target (pkgConfig: "zlib").
-      # `-j 2` caps compile parallelism: swift build/test otherwise spawn one
-      # frontend per core, each 1–2 GB, which starved/killed the containerized
-      # runner mid-compile of the full OTel + swift-nio graph. Fewer parallel jobs
-      # = lower peak memory. Raise if the runner gets more RAM.
+      # declare swift-tools 6.2, which the 6.0 image can't resolve. The base image
+      # already ships zlib1g-dev (the CZlib systemLibrary header, pkgConfig "zlib"),
+      # so no apt step is needed.
+      #
+      # Speed: two named Docker volumes persist SwiftPM's compiled output (`.build`)
+      # and its dependency cache across runs — cold first build populates them, then
+      # only changed sources recompile (the NIO/async-http-client/OTel graph stays
+      # cached), turning ~13 min cold builds into a few minutes incremental. Named
+      # volumes live on the host daemon, so they sidestep the nested-docker path
+      # problem that rules out bind mounts. They are keyed to the toolchain
+      # (`-swift62`) so a future image bump starts clean instead of reusing stale
+      # artifacts. `-j $(nproc)` uses all cores now the runner has RAM headroom;
+      # if it ever OOMs again, cap it (e.g. `-j 4`).
       - name: swift build + test (swift:6.2)
         run: |
           tar -C "$GITHUB_WORKSPACE" -cf - . \
-            | docker run --rm -i -w /src swift:6.2 bash -euxo pipefail -c '
-                mkdir -p /src && tar -C /src -xf -
-                apt-get update && apt-get install -y --no-install-recommends zlib1g-dev
-                swift build -j 2
-                swift test -j 2
-              '
+            | docker run --rm -i -w /src \
+                -v stout-build-swift62:/src/.build \
+                -v stout-spm-cache-swift62:/root/.cache/org.swift.swiftpm \
+                swift:6.2 bash -euxo pipefail -c '
+                  mkdir -p /src && tar -C /src -xf -
+                  swift build -j "$(nproc)"
+                  swift test -j "$(nproc)"
+                '
 
   ios-simulator:
     name: Build (iOS Simulator)
