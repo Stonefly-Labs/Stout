@@ -9,7 +9,7 @@ import OpenTelemetrySdk
 /// Maps a span's `events` to their derived Breeze items (data-model §1c/§1d).
 ///
 /// An OTel `exception` event becomes an ``ExceptionData`` (User Story 4, FR-019);
-/// non-`exception` events become a `MessageData` (User Story 5, added there). This
+/// any non-`exception` event becomes a ``MessageData`` (User Story 5, FR-020). This
 /// type is pure and deterministic — it only inspects one `SpanData.Event` and never
 /// touches the span's own item, correlation, or the envelope. The `SpanTranslator`
 /// stamps the correlated envelope (`ai.operation.parentId` = owning span id).
@@ -51,6 +51,24 @@ enum EventMapping {
     ]
     return ExceptionData(
       exceptions: [details],
+      properties: properties(from: event, consuming: consumed))
+  }
+
+  /// Build a ``MessageData`` from a non-`exception` span event (FR-020).
+  ///
+  /// Unlike the exception path there is **no drop rule**: every non-`exception` event
+  /// always yields one item. The message text is the event's `message` attribute when
+  /// present, otherwise the event name; when the `message` attribute supplies the text
+  /// it is consumed (not duplicated into `properties`). Every remaining event
+  /// attribute is carried into `properties` with the single ``AttributeStringifier``
+  /// rule.
+  static func messageData(from event: SpanData.Event) -> MessageData {
+    let messageAttribute = event.attributes[SemanticConventions.messageAttribute]
+    let message = messageAttribute.map(AttributeStringifier.string(from:)) ?? event.name
+    let consumed: Set<String> =
+      messageAttribute == nil ? [] : [SemanticConventions.messageAttribute]
+    return MessageData(
+      message: message,
       properties: properties(from: event, consuming: consumed))
   }
 

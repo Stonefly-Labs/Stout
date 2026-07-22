@@ -22,6 +22,11 @@ final class EventMappingTests: XCTestCase {
     envelopes.first { $0.baseType == "ExceptionData" }
   }
 
+  /// The `MessageData` envelope among a captured batch, if any.
+  private func message(in envelopes: [CapturedEnvelope]) -> CapturedEnvelope? {
+    envelopes.first { $0.baseType == "MessageData" }
+  }
+
   func testExceptionEventBecomesCorrelatedExceptionData() async {
     let harness = makeTracingHarness()
     var builder = SpanDataBuilder(name: "GET /widgets", kind: .server)
@@ -114,5 +119,73 @@ final class EventMappingTests: XCTestCase {
     // Consumed exception fields are not duplicated into `properties`.
     XCTAssertNil(props?["exception.type"])
     XCTAssertNil(props?["exception.message"])
+  }
+
+  // MARK: - User Story 5 — non-`exception` events → correlated MessageData
+
+  func testNonExceptionEventBecomesCorrelatedMessageData() async {
+    let harness = makeTracingHarness()
+    var builder = SpanDataBuilder(name: "GET /widgets", kind: .server)
+    builder.events = [
+      SpanDataBuilder.event(
+        "cache.miss",
+        attributes: [
+          "cache.key": .string("widgets:42"),
+          "cache.ttl": .int(30),
+        ])
+    ]
+    let span = builder.build()
+
+    _ = await exporter(harness).export(spans: [span], explicitTimeout: nil)
+    // One RequestData for the span + one MessageData for the event.
+    let envelopes = await harness.envelopes(atLeast: 2)
+
+    XCTAssertEqual(envelopes.count, 2)
+    XCTAssertNotNil(envelopes.first { $0.baseType == "RequestData" })
+
+    guard let msg = message(in: envelopes) else {
+      return XCTFail("expected a MessageData envelope")
+    }
+    XCTAssertEqual(msg.name, "Microsoft.ApplicationInsights.Message")
+    XCTAssertEqual(msg.baseData?["ver"]?.doubleValue, 2)
+    // No `message` attribute, so the event name is the message text.
+    XCTAssertEqual(msg.baseData?["message"]?.stringValue, "cache.miss")
+
+    let props = msg.baseData?["properties"]
+    XCTAssertEqual(props?["cache.key"]?.stringValue, "widgets:42")
+    XCTAssertEqual(props?["cache.ttl"]?.stringValue, "30")
+
+    // Correlated under the owning span: same operation id, parentId = span id.
+    XCTAssertEqual(msg.tag(PartATagKeys.operationId), SpanDataBuilder.defaultTraceIdHex)
+    XCTAssertEqual(msg.tag(PartATagKeys.operationParentId), SpanDataBuilder.defaultSpanIdHex)
+    // A message is not a request, so it carries no `ai.operation.name`.
+    XCTAssertNil(msg.tag(PartATagKeys.operationName))
+  }
+
+  func testMessageAttributeOverridesEventNameAndIsConsumed() async {
+    let harness = makeTracingHarness()
+    var builder = SpanDataBuilder(kind: .client)
+    builder.events = [
+      SpanDataBuilder.event(
+        "log",
+        attributes: [
+          "message": .string("retrying upstream call"),
+          "attempt": .int(2),
+        ])
+    ]
+    let span = builder.build()
+
+    _ = await exporter(harness).export(spans: [span], explicitTimeout: nil)
+    let envelopes = await harness.envelopes(atLeast: 2)
+
+    guard let msg = message(in: envelopes) else {
+      return XCTFail("expected a MessageData envelope")
+    }
+    // The `message` attribute supplies the text in place of the event name.
+    XCTAssertEqual(msg.baseData?["message"]?.stringValue, "retrying upstream call")
+    let props = msg.baseData?["properties"]
+    // The consumed `message` attribute is not duplicated into `properties`.
+    XCTAssertNil(props?["message"])
+    XCTAssertEqual(props?["attempt"]?.stringValue, "2")
   }
 }

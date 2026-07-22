@@ -22,8 +22,8 @@ import StoutCore
 ///    requests; DB/RPC/messaging/HTTP for dependencies), consuming recognized keys.
 /// 4. Carry every unconsumed attribute **and** span link into `properties`.
 /// 5. Compute `success`/`responseCode`/`resultCode` via `SuccessPredicate`.
-/// 6. Emit exactly one Request/Dependency item (event-derived Exception/Message
-///    items arrive with US4/US5).
+/// 6. Emit exactly one Request/Dependency item, then one correlated event-derived
+///    item per emitted span event (`exception` ⇒ Exception, US4; other ⇒ Message, US5).
 /// 7. Stamp each item into an `Envelope` (`time` = span `startTime`; `sampleRate` =
 ///    100, no sampling decision — spec 05 owns that).
 ///
@@ -95,26 +95,38 @@ enum SpanTranslator {
 
   /// One correlated envelope per emitted span event, in span-event order. An
   /// `exception` event with both `exception.type` and `exception.message` becomes an
-  /// `ExceptionData` (US4, FR-019); events failing the drop rule are skipped, and
-  /// non-`exception` events are handled by US5. Every event item hangs under the
-  /// owning span — `ai.operation.parentId` = span id (`CorrelationMapping.eventTags`,
-  /// data-model §2) — with the same operation id, and is stamped at the event's own
-  /// timestamp. Error status → `success = false` is owned by the Request/Dependency
-  /// item's `SuccessPredicate`, independent of whether any event is present (INV-4).
+  /// `ExceptionData` (US4, FR-019) — events failing that drop rule are skipped; every
+  /// non-`exception` event becomes a `MessageData` (US5, FR-020), which has no drop
+  /// rule. Every event item hangs under the owning span — `ai.operation.parentId` =
+  /// span id (`CorrelationMapping.eventTags`, data-model §2) — with the same operation
+  /// id, and is stamped at the event's own timestamp. Error status → `success = false`
+  /// is owned by the Request/Dependency item's `SuccessPredicate`, independent of
+  /// whether any event is present (INV-4).
   private static func eventEnvelopes(
     for span: SpanData, using factory: EnvelopeFactory
   ) -> [Envelope] {
+    // Correlation is per-span (parentId = owning span id), identical for every event.
+    let tags = CorrelationMapping.eventTags(traceId: span.traceId, owningSpanId: span.spanId)
     var envelopes: [Envelope] = []
-    for event in span.events where EventMapping.isException(event) {
-      guard let data = EventMapping.exceptionData(from: event) else { continue }
-      let tags = CorrelationMapping.eventTags(traceId: span.traceId, owningSpanId: span.spanId)
-      envelopes.append(
-        factory.makeEnvelope(
-          name: ExceptionData.telemetryName,
-          payload: data,
-          time: event.timestamp,
-          sampleRate: defaultSampleRate,
-          itemTags: tags))
+    for event in span.events {
+      if EventMapping.isException(event) {
+        guard let data = EventMapping.exceptionData(from: event) else { continue }
+        envelopes.append(
+          factory.makeEnvelope(
+            name: ExceptionData.telemetryName,
+            payload: data,
+            time: event.timestamp,
+            sampleRate: defaultSampleRate,
+            itemTags: tags))
+      } else {
+        envelopes.append(
+          factory.makeEnvelope(
+            name: MessageData.telemetryName,
+            payload: EventMapping.messageData(from: event),
+            time: event.timestamp,
+            sampleRate: defaultSampleRate,
+            itemTags: tags))
+      }
     }
     return envelopes
   }
