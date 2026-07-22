@@ -197,13 +197,13 @@ alone (no event) ⇒ `success=false`, no fabricated `ExceptionData`.
 
 ### Tests for User Story 6 ⚠️
 
-- [ ] T048 [P] [US6] `Tests/StoutTracingTests/ExporterLifecycleTests.swift` — `flush()` forwards buffered items via `pipeline.flushNow()`; nothing stranded (US6 Acc 1).
-- [ ] T049 [P] [US6] `ExporterLifecycleTests.swift` (post-shutdown) — after `pipeline.shutdown()`, `export(...)` drops without crash/block, emits **no** telemetry, and surfaces exactly one rate-limited `postShutdownSubmit` diagnostic (US6 Acc 2, FR-005).
-- [ ] T050 [P] [US6] `Tests/StoutTracingTests/ConcurrencyTests.swift` — concurrent `export(...)` from many tasks is race-free and safe (FR-027, SC-010).
+- [X] T048 [P] [US6] `Tests/StoutTracingTests/ExporterLifecycleTests.swift` — `flush()` forwards buffered items via `pipeline.flushNow()`; nothing stranded (US6 Acc 1).
+- [X] T049 [P] [US6] `ExporterLifecycleTests.swift` (post-shutdown) — after `pipeline.shutdown()`, `export(...)` drops without crash/block, emits **no** telemetry, and surfaces exactly one rate-limited `postShutdownSubmit` diagnostic (US6 Acc 2, FR-005).
+- [X] T050 [P] [US6] `Tests/StoutTracingTests/ConcurrencyTests.swift` — concurrent `export(...)` from many tasks is race-free and safe (FR-027, SC-010).
 
 ### Implementation for User Story 6
 
-- [ ] T051 [US6] Implement `flush(...)`/`shutdown(...)` in `AzureMonitorTraceExporter` — async `flush` awaits `pipeline.flushNow()`; `shutdown` delegates to `pipeline.shutdown()` (idempotent); post-shutdown `export` relies on the inert pipeline's drop + `postShutdownSubmit` (no exporter-side state), FR-004/005, contract table.
+- [X] T051 [US6] Implement `flush(...)`/`shutdown(...)` in `AzureMonitorTraceExporter` — async `flush` awaits `pipeline.flushNow()`; `shutdown` delegates to `pipeline.shutdown()` (idempotent); post-shutdown `export` relies on the inert pipeline's drop + `postShutdownSubmit` (no exporter-side state), FR-004/005, contract table. **Implementation already present** (landed with the exporter in T026's file): async `flush`/`shutdown` await the pipeline, sync overloads kick the work off in a `Task` without blocking, and there is no exporter-side lifecycle state — the inert pipeline owns the drop. Verified end-to-end by the T048–T050 suites.
 
 **Checkpoint**: Lifecycle is correct; host is never blocked or crashed at exit.
 
